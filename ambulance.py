@@ -16,13 +16,13 @@ class Cluster:
     def __init__ (self, filename):
         df = pd.read_pickle("C:/Users/rjhosler/Documents/_REU/df.pkl")
         data = np.stack((df.XCOORD, df.YCOORD), axis = 1)
-        data = data [0:1000, :]
+        data = data [922439:922539, :]
         self._data = data
 
         X1 = (np.amin((data[:,0])) - np.amax((data[:,0]))) * np.random.random_sample((30,1)) + np.amax((data[:,0]))
         X2 = (np.amin((data[:,1])) - np.amax((data[:,1]))) * np.random.random_sample((30,1)) + np.amax((data[:,1]))
         X = np.stack ((X1, X2), axis = 1)
-        self._centers  = X.reshape ((30,2))       
+        self._centers  = X.reshape ((30,2))
 
     #method to implement the wasserstein algorithm
     #return new centers
@@ -32,26 +32,34 @@ class Cluster:
         b = len (self._centers)
         X = self._centers
         data = self._data
-        lam = 150
-        max_iter = 0
+        lam = 300
+        max_iter1 = 0
         while (1):
             M = cdist (X, data, 'euclidean')
             K = math.e ** (-1 * lam * M)
             Kt = np.divide (K, a)
             u = np.transpose (np.ones(len(X)) / len(X))
             change = 1
-            while (change > 0.0001):
+            max_iter2 = 0
+            while (change > 0.0001 or max_iter2 < 100):
                 oldu = u
                 u = np.transpose (np.ones(len(X)) / np.matmul (Kt, np.divide (b, np.matmul (np.transpose (K), u))))
                 change = la.norm (u - oldu)
+                max_iter2 += 1
             V = np.divide (b, np.matmul (np.transpose(K), u))        
             T = np.matmul (np.matmul (np.diag(u), K), np.diag (V))
             oldX = X
             X = (X * (1 - theta)) + (np.divide (np.matmul (T, data), a) * theta)
+            max_iter1 += 1
             print (la.norm (oldX - X))
-            max_iter += 1
-            if (la.norm (oldX - X) < 0.001 or max_iter > 50):
+            if (la.norm (oldX - X) < 0.0025 or max_iter1 > 50):
                 return X
+
+    #Alternate clustering method using k-means
+    def kmeans_cluster (self):
+        kmeans = KMeans(n_clusters = 30).fit(self._data[:,0:2])
+        self._centers = kmeans.cluster_centers_
+        self._data [:, 2] = kmeans.labels_
 
     #Assign cluster ID's by proximity
     #return data concatentated with cluster_id
@@ -100,6 +108,10 @@ class Cluster:
         self._centers = self.wasserstein()
         self._data = self.cluster_assignment()
 
+    #driver method for kmeans
+    def process_data_kmeans (self):
+        self.kmeans_cluster()
+
     #return average distance
     def get_dist (self):
         return self.calc_avg_dist()
@@ -122,6 +134,7 @@ app = Flask(__name__)
 @app.route('/success/<name>')
 def success(name):
     cluster = Cluster (name)
+    
     cluster.process_data()
     data = cluster.get_data()
     centers = cluster.get_centers()
@@ -133,17 +146,36 @@ def success(name):
     plt.scatter(centers[:, 0], centers[:, 1], c = 'red', s = 100, alpha=0.5)
     plt.show()
 
-    summary = [dist, clusterVar]
+    summary1 = [dist, clusterVar]
 
     data = data.tolist()
     centers = centers.tolist()
-    clusterSizes = clusterSizes.tolist()
+    clusterSizes1 = clusterSizes.tolist()
+
+    cluster.process_data_kmeans()
+    data = cluster.get_data()
+    centers = cluster.get_centers()
+    dist = cluster.get_dist()
+    clusterSizes, clusterVar = cluster.get_cluster_stats()
+
+    plt.title ('kmeans')
+    plt.scatter(data[:,0], data[:,1])
+    plt.scatter(centers[:, 0], centers[:, 1], c = 'red', s = 100, alpha=0.5)
+    plt.show()
+
+    summary2 = [dist, clusterVar]
+
+    data = data.tolist()
+    centers = centers.tolist()
+    clusterSizes2 = clusterSizes.tolist()
+
+    summary = [clusterSizes1, summary1, clusterSizes2, summary2]
 
     return jsonify (summary)
 
 @app.route('/login', methods = ['POST', 'GET'])
 def login():
-   if request.method == 'POST':
+   if (request.method == 'POST'):
       user = request.form.get('nm', None)
       return redirect(url_for('success',name = user))
    else:
