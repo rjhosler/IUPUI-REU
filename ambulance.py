@@ -13,16 +13,18 @@ from haversine import haversine
 #Class for processing data with wasserstein clustering
 class Cluster:
     #initialize data with the passed file
-    def __init__ (self, filename):
-        df = pd.read_pickle("C:/Users/rjhosler/Documents/_REU/df.pkl")
+    def __init__ (self, filename, n):
+        self._n = n
+        dataSlice = np.random.randint(low = 922539-500, high = 922539-50)
+        df = pd.read_pickle("C:/Users/rjhosler/Documents/_REU/df1.pkl")
         data = np.stack((df.XCOORD, df.YCOORD), axis = 1)
-        data = data [922439:922539, :]
+        data = data [dataSlice:922539, :]
         self._data = data
 
-        X1 = (np.amin((data[:,0])) - np.amax((data[:,0]))) * np.random.random_sample((30,1)) + np.amax((data[:,0]))
-        X2 = (np.amin((data[:,1])) - np.amax((data[:,1]))) * np.random.random_sample((30,1)) + np.amax((data[:,1]))
+        X1 = (np.amin((data[:,0])) - np.amax((data[:,0]))) * np.random.random_sample((n,1)) + np.amax((data[:,0]))
+        X2 = (np.amin((data[:,1])) - np.amax((data[:,1]))) * np.random.random_sample((n,1)) + np.amax((data[:,1]))
         X = np.stack ((X1, X2), axis = 1)
-        self._centers  = X.reshape ((30,2))
+        self._centers  = X.reshape ((n,2))
 
     #method to implement the wasserstein algorithm
     #return new centers
@@ -31,8 +33,8 @@ class Cluster:
         a = len (self._data)
         b = len (self._centers)
         X = self._centers
-        data = self._data
-        lam = 300
+        data = self._data [:, 0:2]
+        lam = 200
         max_iter1 = 0
         while (1):
             M = cdist (X, data, 'euclidean')
@@ -52,14 +54,19 @@ class Cluster:
             X = (X * (1 - theta)) + (np.divide (np.matmul (T, data), a) * theta)
             max_iter1 += 1
             print (la.norm (oldX - X))
-            if (la.norm (oldX - X) < 0.0025 or max_iter1 > 50):
+            if (la.norm (oldX - X) < 0.0001 or max_iter1 > 100):
                 return X
 
     #Alternate clustering method using k-means
-    def kmeans_cluster (self):
-        kmeans = KMeans(n_clusters = 30).fit(self._data[:,0:2])
-        self._centers = kmeans.cluster_centers_
-        self._data [:, 2] = kmeans.labels_
+    def kmeans_cluster (self, init):
+        if (init == True):
+            kmeans = KMeans(n_clusters = len(self._centers), init = self._centers, n_init = 1).fit(self._data[:,0:2])
+            self._centers = kmeans.cluster_centers_
+            self._data [:, 2] = kmeans.labels_
+        else:
+            kmeans = KMeans(n_clusters = self._n, init = 'random').fit(self._data[:,0:2])
+            self._centers = kmeans.cluster_centers_
+            self._data [:, 2] = kmeans.labels_
 
     #Assign cluster ID's by proximity
     #return data concatentated with cluster_id
@@ -67,26 +74,33 @@ class Cluster:
         cluster_id = np.zeros ((len(self._data), 1))
         for i in range (len(self._data)):
             for j in range (len(self._centers)):
-                dist = la.norm (self._data [i,:] - self._centers [j,:])
+                dist = la.norm (self._data [i, 0:2] - self._centers [j,:])
                 if (j == 0 or dist < minDist):
                     minDist = dist
                     cluster_id [i] = j
-        return np.hstack ((self._data, cluster_id))
+        if (len(self._data [0]) == 2):
+            return np.hstack ((self._data, cluster_id))
+        else:
+            self._data [:, 2] = np.transpose (cluster_id)
+            return self._data
 
-    #method to calculate average within cluster distance
+    #method to calculate average within cluster distance weighted by the probability of the cluster and the size of the cluster for even representation
     #NOTE: only works when cluster IDs have been assigned
     #return overall average
     def calc_avg_dist (self):
         avg_dist = np.empty ([0])
         for i in range (len(self._centers)):
             isEmpty = True
+            size = 0
             dist_array = np.empty ([0])
             for j in range (len(self._data)):
                 if (self._data [j, 2] == i):
                     dist_array = np.append (dist_array, haversine (self._centers [i, :], self._data [j, 0:2], miles = True))
                     isEmpty = False
+                    size += 1
             if (isEmpty == False):
-                avg_dist = np.append (avg_dist, dist_array.mean())
+                weight = (size ** 2) / len(self._data)
+                avg_dist = np.append (avg_dist, dist_array.mean() * weight)
         return avg_dist.mean()
 
     #method to return statistics on cluster size
@@ -101,7 +115,11 @@ class Cluster:
                     clusterSize += 1
             avg_cluster = np.append (avg_cluster, clusterSize)
         return avg_cluster, avg_cluster.var()
-        
+
+    #define n centers for initialization
+    def set_centers (self, centers, n):
+        busy = np.random.choice(np.arange(len(centers)), replace = False, size = n)
+        self._centers = centers [busy]
 
     #driver method
     def process_data (self):
@@ -109,8 +127,11 @@ class Cluster:
         self._data = self.cluster_assignment()
 
     #driver method for kmeans
-    def process_data_kmeans (self):
-        self.kmeans_cluster()
+    def process_data_kmeans (self, init):
+        if (init == True):
+            self.kmeans_cluster (True)
+        else:
+            self.kmeans_cluster (False)
 
     #return average distance
     def get_dist (self):
@@ -133,43 +154,98 @@ app = Flask(__name__)
 
 @app.route('/success/<name>')
 def success(name):
-    cluster = Cluster (name)
-    
+    n = np.random.randint(low = 10, high = 30)
+    cluster = Cluster (name, n)
+
+    #init wasserstein
     cluster.process_data()
     data = cluster.get_data()
     centers = cluster.get_centers()
     dist = cluster.get_dist()
     clusterSizes, clusterVar = cluster.get_cluster_stats()
-
+    '''
     plt.title ('Wasserstein')
     plt.scatter(data[:,0], data[:,1])
     plt.scatter(centers[:, 0], centers[:, 1], c = 'red', s = 100, alpha=0.5)
     plt.show()
+    '''
+    summary1 = [dist]
 
-    summary1 = [dist, clusterVar]
-
-    data = data.tolist()
-    centers = centers.tolist()
-    clusterSizes1 = clusterSizes.tolist()
-
-    cluster.process_data_kmeans()
+    #update wasserstein
+    cluster.set_centers(centers, n-1)
+    cluster.process_data()
     data = cluster.get_data()
     centers = cluster.get_centers()
     dist = cluster.get_dist()
     clusterSizes, clusterVar = cluster.get_cluster_stats()
+    '''
+    plt.title ('Wasserstein2')
+    plt.scatter(data[:,0], data[:,1])
+    plt.scatter(centers[:, 0], centers[:, 1], c = 'red', s = 100, alpha=0.5)
+    plt.show()
+    '''
+    summary2 = [dist]
 
+    #update wasserstein again
+    cluster.set_centers(centers, n-2)
+    cluster.process_data()
+    data = cluster.get_data()
+    centers = cluster.get_centers()
+    dist = cluster.get_dist()
+    clusterSizes, clusterVar = cluster.get_cluster_stats()
+    '''
+    plt.title ('Wasserstein3')
+    plt.scatter(data[:,0], data[:,1])
+    plt.scatter(centers[:, 0], centers[:, 1], c = 'red', s = 100, alpha=0.5)
+    plt.show()
+    '''
+    summary3 = [dist]
+
+    #init kmeans
+    cluster.process_data_kmeans(False)
+    data = cluster.get_data()
+    centers = cluster.get_centers()
+    dist = cluster.get_dist()
+    clusterSizes, clusterVar = cluster.get_cluster_stats()
+    '''
     plt.title ('kmeans')
     plt.scatter(data[:,0], data[:,1])
     plt.scatter(centers[:, 0], centers[:, 1], c = 'red', s = 100, alpha=0.5)
     plt.show()
+    '''
+    summary4 = [dist]
 
-    summary2 = [dist, clusterVar]
+    #update kmeans
+    cluster.set_centers(centers, n-1)
+    cluster.process_data_kmeans(True)
+    data = cluster.get_data()
+    centers = cluster.get_centers()
+    dist = cluster.get_dist()
+    clusterSizes, clusterVar = cluster.get_cluster_stats()
+    '''
+    plt.title ('kmeans2')
+    plt.scatter(data[:,0], data[:,1])
+    plt.scatter(centers[:, 0], centers[:, 1], c = 'red', s = 100, alpha=0.5)
+    plt.show()
+    '''
+    summary5 = [dist]
 
-    data = data.tolist()
-    centers = centers.tolist()
-    clusterSizes2 = clusterSizes.tolist()
+    #update kmeans again
+    cluster.set_centers(centers, n-2)
+    cluster.process_data_kmeans(True)
+    data = cluster.get_data()
+    centers = cluster.get_centers()
+    dist = cluster.get_dist()
+    clusterSizes, clusterVar = cluster.get_cluster_stats()
+    '''
+    plt.title ('kmeans3')
+    plt.scatter(data[:,0], data[:,1])
+    plt.scatter(centers[:, 0], centers[:, 1], c = 'red', s = 100, alpha=0.5)
+    plt.show()
+    ''' 
+    summary6 = [dist]
 
-    summary = [clusterSizes1, summary1, clusterSizes2, summary2]
+    summary = [summary1, summary2, summary3, summary4, summary5, summary6]
 
     return jsonify (summary)
 
