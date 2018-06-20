@@ -141,7 +141,7 @@ class PointProcess:
         self._w = [.5, .1, .05]                   
         self._theta = np.load('theta.npy')              # size len(w)               
         self._mu = np.load('mu.npy')                    # size X_GRID_SIZE, YGRIDSIZE 
-        self._last_times = pd.load('last_times.npy')    # size len(time memory)        
+        self._last_times = np.load('last_times.npy')    # size len(time memory)        
         self._G_times = pd.read_pickle('G_times.pkl')   # size X_GRID_SIZE, YGRIDSIZE
 
         if self._F.shape[0:2] == self._Lam.shape[1:3] == self._G_times.shape == self._mu.shape:
@@ -204,7 +204,7 @@ class PointProcess:
         self._last_times = np.append(self._last_times, event_time)
 
         # append new matrix to lambda to fill up during this update
-        Lam = np.concatenate((Lam, np.zeros([1, X_GRID_SIZE, Y_GRID_SIZE])), axis=0)
+        Lam = np.concatenate((Lam, np.zeros([1, self._X_GRID_SIZE, self._Y_GRID_SIZE])), axis=0)
 
         # global update of all grids
         for x in self._X_GRID_SIZE:
@@ -233,11 +233,11 @@ class PointProcess:
         time_memory = 30    # Number of past event lambads and times to save
         if time_memory <= min(len(self._Lam), len(self._last_times)):
             self._Lam = self._Lam[-time_memory:]
-            self._last_times = self._last_times[[-time_memory:,:]]
+            self._last_times = self._last_times[-time_memory:,:]
 
         # could also choose to pickle everything here
         #self._G_times.to_pickle('G_times.pkl')
-        #self._last_times.to_pickle('last_times.pkl')
+        #np.save('last_times.npy', self._last_times)
         #np.save('Lam.pkl', self._Lam)
         #np.save('F.pkl', self._F)
         #np.save('theta.pkl', self._theta)
@@ -247,8 +247,8 @@ class PointProcess:
         # returns an array of coordinates and their intensity for front end (yes, currently the same as locs_for_wasserstein...)
         x_y_lam = np.empty((0,0,0))
 
-        for x in self._X_GRID_SIZE:
-            for y in self._Y_GRID_SIZE:
+        for x in range(0, self._X_GRID_SIZE):
+            for y in range(0, self._Y_GRID_SIZE):
                 xcoord, ycoord = self.grid_to_coord(x, y)
                 # for now just sending over lambda snapshot @ current prediction...
                 lam = self._Lam[-1][x][y]
@@ -269,13 +269,13 @@ class PointProcess:
         # returns an array of points for Waserstein [[x, y, lambda], [...]]
         x_y_lam = np.empty((0,0,0))
 
-        for x in self._X_GRID_SIZE:
-            for y in self._Y_GRID_SIZE:
+        for x in range(0, self._X_GRID_SIZE):
+            for y in range(0, self._Y_GRID_SIZE):
                 xcoord, ycoord = self.grid_to_coord(x, y)
                 # for now just sending over lambda snapshot @ current prediction...
                 lam = self._Lam[-1][x][y]
                 to_append = xcoord, ycoord, lam
-                np.append(x_y_lam, to_append)
+                x_y_lam = np.append(x_y_lam, to_append)
 
         x_y_lam = x_y_lam.reshape ((len(x_y_lam)//3,3))
         return x_y_lam
@@ -336,4 +336,6 @@ def login():
       return redirect(url_for('success',name = user))
 
 if __name__ == '__main__':
-   app.run()
+   #app.run()
+   process = PointProcess()
+   print(process.locs_for_wasserstein())
