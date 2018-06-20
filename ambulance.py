@@ -9,61 +9,78 @@ from numpy.linalg import inv
 import math
 from scipy.spatial.distance import cdist
 from haversine import haversine
+from math import *
+from random import *
+import datetime as datetime
+from tempfile import TemporaryFile
 import datetime as datetime
 import random
 import warnings
 
-
 #Class for processing data with wasserstein clustering
 class Cluster:
     #initialize data with the passed file
-    def __init__ (self, filename):
-        df = pd.read_pickle("C:/Users/rjhosler/Documents/_REU/df.pkl")
+    def __init__ (self, data, n):
+        self._n = n
+        '''
+        dataSlice = np.random.randint(low = 922539-500, high = 922539-50)
+        df = pd.read_pickle("C:/Users/rjhosler/Documents/_REU/df1.pkl")
         data = np.stack((df.XCOORD, df.YCOORD), axis = 1)
-        data = data [922439:922539, :]
+        data = data [dataSlice:922539, :]
+        '''
         self._data = data
 
-        X1 = (np.amin((data[:,0])) - np.amax((data[:,0]))) * np.random.random_sample((30,1)) + np.amax((data[:,0]))
-        X2 = (np.amin((data[:,1])) - np.amax((data[:,1]))) * np.random.random_sample((30,1)) + np.amax((data[:,1]))
+        X1 = (np.percentile((data[:,0]), 25) - np.percentile((data[:,0]), 75)) * np.random.random_sample((n,1)) + np.percentile((data[:,0]), 75)
+        X2 = (np.percentile((data[:,1]), 25) - np.percentile((data[:,1]), 75)) * np.random.random_sample((n,1)) + np.percentile((data[:,1]), 75)
         X = np.stack ((X1, X2), axis = 1)
-        self._centers  = X.reshape ((30,2))
+        self._centers  = X.reshape ((n,2))
 
     #method to implement the wasserstein algorithm
     #return new centers
     def wasserstein (self):
-        theta = 0.5
-        a = len (self._data)
-        b = len (self._centers)
+        theta = 1
+        a = 1 / len (self._centers)
+        #use intensities for b
+        b = self._data [:,2] / sum (self._data [:,2])
         X = self._centers
-        data = self._data
-        lam = 300
+        data = self._data [:, 0:2]
+        lam = 175
         max_iter1 = 0
         while (1):
             M = cdist (X, data, 'euclidean')
             K = math.e ** (-1 * lam * M)
             Kt = np.divide (K, a)
             u = np.transpose (np.ones(len(X)) / len(X))
+            u = np.float64(u)
             change = 1
             max_iter2 = 0
-            while (change > 0.0001 or max_iter2 < 100):
+            while (change > 0.0001):
                 oldu = u
-                u = np.transpose (np.ones(len(X)) / np.matmul (Kt, np.divide (b, np.matmul (np.transpose (K), u))))
+                u = np.float64(np.transpose (np.ones(len(X)) / np.matmul (Kt, np.divide (b, np.matmul (np.transpose (K), u)))))
+                if (np.isnan(u).any() or np.isinf(u).any()):
+                    return (X)
                 change = la.norm (u - oldu)
+                if (max_iter2 > 100):
+                    change = 0
                 max_iter2 += 1
             V = np.divide (b, np.matmul (np.transpose(K), u))        
             T = np.matmul (np.matmul (np.diag(u), K), np.diag (V))
             oldX = X
-            X = (X * (1 - theta)) + (np.divide (np.matmul (T, data), a) * theta)
+            X = np.float64((X * (1 - theta)) + (np.divide (np.matmul (T, data), a) * theta))
             max_iter1 += 1
-            print (la.norm (oldX - X))
-            if (la.norm (oldX - X) < 0.0025 or max_iter1 > 50):
+            if (la.norm (oldX - X) < 0.0001 or max_iter1 > 100):
                 return X
 
     #Alternate clustering method using k-means
-    def kmeans_cluster (self):
-        kmeans = KMeans(n_clusters = 30).fit(self._data[:,0:2])
-        self._centers = kmeans.cluster_centers_
-        self._data [:, 2] = kmeans.labels_
+    def kmeans_cluster (self, init):
+        if (init == True):
+            kmeans = KMeans(n_clusters = len(self._centers), init = self._centers, n_init = 1).fit(self._data[:,0:2])
+            self._centers = kmeans.cluster_centers_
+            self._data [:, 3] = kmeans.labels_
+        else:
+            kmeans = KMeans(n_clusters = self._n, init = 'random').fit(self._data[:,0:2])
+            self._centers = kmeans.cluster_centers_
+            self._data [:, 3] = kmeans.labels_
 
     #Assign cluster ID's by proximity
     #return data concatentated with cluster_id
@@ -71,26 +88,35 @@ class Cluster:
         cluster_id = np.zeros ((len(self._data), 1))
         for i in range (len(self._data)):
             for j in range (len(self._centers)):
-                dist = la.norm (self._data [i,:] - self._centers [j,:])
+                dist = la.norm (self._data [i, 0:2] - self._centers [j,:])
                 if (j == 0 or dist < minDist):
                     minDist = dist
                     cluster_id [i] = j
-        return np.hstack ((self._data, cluster_id))
+        if (len(self._data [0]) == 3):
+            return np.hstack ((self._data, cluster_id))
+        else:
+            self._data [:, 3] = np.transpose (cluster_id)
+            return self._data
 
-    #method to calculate average within cluster distance
+    #method to calculate average within cluster distance weighted by point intensities and balanced representation of clusters
     #NOTE: only works when cluster IDs have been assigned
     #return overall average
     def calc_avg_dist (self):
         avg_dist = np.empty ([0])
         for i in range (len(self._centers)):
             isEmpty = True
+            size = 0
+            intensity = 0
             dist_array = np.empty ([0])
             for j in range (len(self._data)):
-                if (self._data [j, 2] == i):
+                if (self._data [j, 3] == i):
                     dist_array = np.append (dist_array, haversine (self._centers [i, :], self._data [j, 0:2], miles = True))
                     isEmpty = False
+                    size += 1
+                    intensity += self._data [j, 2]
             if (isEmpty == False):
-                avg_dist = np.append (avg_dist, dist_array.mean())
+                weight = (intensity / sum (self._data [:,2])) * (size / len (self._data))
+                avg_dist = np.append (avg_dist, dist_array.mean() * weight)
         return avg_dist.mean()
 
     #method to return statistics on cluster size
@@ -101,20 +127,49 @@ class Cluster:
         for i in range (len(self._centers)):
             clusterSize = 0
             for j in range (len(self._data)):
-                if (self._data [j, 2] == i):
+                if (self._data [j, 3] == i):
                     clusterSize += 1
             avg_cluster = np.append (avg_cluster, clusterSize)
         return avg_cluster, avg_cluster.var()
-        
 
-    #driver method
-    def process_data (self):
-        self._centers = self.wasserstein()
+    #define n centers for initialization
+    def set_centers (self, centers, n):
+        busy = np.random.choice(np.arange(len(centers)), replace = False, size = n)
+        self._centers = centers [busy]
+
+    #randomize centers
+    def randomize_centers (self):
+        data = self._data
+        n = self._n
+        X1 = (np.percentile((data[:,0]), 25) - np.percentile((data[:,0]), 75)) * np.random.random_sample((n,1)) + np.percentile((data[:,0]), 75)
+        X2 = (np.percentile((data[:,1]), 25) - np.percentile((data[:,1]), 75)) * np.random.random_sample((n,1)) + np.percentile((data[:,1]), 75)
+        X = np.stack ((X1, X2), axis = 1)
+        self._centers  = X.reshape ((n,2))
+
+    #driver method, retreive best result after n iterations
+    def process_data (self, n_iter):
+        minDist = 100
+        centers = self._centers
+        data = self._data
+        for i in range (n_iter):
+            self._centers = self.wasserstein()
+            self._data = self.cluster_assignment()
+            dist = self.calc_avg_dist()
+            print (dist)
+            if (i == 0 or dist < minDist):
+                minDist = dist
+                centers = self._centers
+            self.randomize_centers()
+
+        self._centers = centers
         self._data = self.cluster_assignment()
 
     #driver method for kmeans
-    def process_data_kmeans (self):
-        self.kmeans_cluster()
+    def process_data_kmeans (self, init):
+        if (init == True):
+            self.kmeans_cluster (True)
+        else:
+            self.kmeans_cluster (False)
 
     #return average distance
     def get_dist (self):
@@ -131,7 +186,6 @@ class Cluster:
     #return centers
     def get_centers (self):
         return self._centers
-
 
 class PointProcess:
     #initialize with pre-trained parameters
@@ -247,16 +301,14 @@ class PointProcess:
         # returns an array of coordinates and their intensity for front end (yes, currently the same as locs_for_wasserstein...)
         x_y_lam = np.empty((0,0,0))
 
-        x_y_lam = np.empty((0,0,0))
-
         for x in range(0, self._X_GRID_SIZE):
             for y in range(0, self._Y_GRID_SIZE):
                 xcoord, ycoord = self.grid_to_coord(x, y)
                 # for now just sending over lambda snapshot @ current prediction...
                 lam = self._Lam[-1][x][y]
                 to_append = xcoord, ycoord, lam
-                x_y_lam = np.append(x_y_lam, to_append)
-
+                np.append(x_y_lam, to_append)
+        
         x_y_lam = x_y_lam.reshape ((len(x_y_lam)//3,3))
         return x_y_lam
 
@@ -282,15 +334,26 @@ class PointProcess:
         x_y_lam = x_y_lam.reshape ((len(x_y_lam)//3,3))
         return x_y_lam
 
-
+    
 from flask import Flask, redirect, url_for, request, jsonify     
 app = Flask(__name__)
 
 @app.route('/success/<name>')
 def success(name):
-    cluster = Cluster (name)
-    
-    cluster.process_data()
+    npzfile = np.load ('grid_loc1.npz')
+    grid_loc = npzfile['arr_0']
+    #grid_loc = np.delete (grid_loc, (19), axis = 0)
+    '''
+    plt.scatter(grid_loc [:,0], grid_loc [:,1])
+    plt.title("Number of events in each grid")
+    plt.show()
+    '''
+    grid_loc [:,2] = np.log (grid_loc [:,2])
+    n = 30 #np.random.randint(low = 15, high = 30)
+    cluster = Cluster (grid_loc, n)
+
+    #init wasserstein
+    cluster.process_data(10)
     data = cluster.get_data()
     centers = cluster.get_centers()
     dist = cluster.get_dist()
@@ -298,35 +361,26 @@ def success(name):
 
     plt.title ('Wasserstein')
     plt.scatter(data[:,0], data[:,1])
-    plt.scatter(centers[:, 0], centers[:, 1], c = 'red', s = 100, alpha=0.5)
+    plt.scatter(centers[:,0], centers[:,1], c = 'red', s = 100, alpha=0.5)
     plt.show()
-
-    summary1 = [dist, clusterVar]
-
-    data = data.tolist()
-    centers = centers.tolist()
-    clusterSizes1 = clusterSizes.tolist()
-
-    cluster.process_data_kmeans()
+    
+    summary1 = [dist]
+    
+    #init kmeans
+    cluster.process_data_kmeans(False)
     data = cluster.get_data()
     centers = cluster.get_centers()
     dist = cluster.get_dist()
     clusterSizes, clusterVar = cluster.get_cluster_stats()
 
-    plt.title ('kmeans')
+    plt.title ('Kmeans')
     plt.scatter(data[:,0], data[:,1])
-    plt.scatter(centers[:, 0], centers[:, 1], c = 'red', s = 100, alpha=0.5)
+    plt.scatter(centers[:,0], centers[:,1], c = 'red', s = 100, alpha=0.5)
     plt.show()
-
-    summary2 = [dist, clusterVar]
-
-    data = data.tolist()
-    centers = centers.tolist()
-    clusterSizes2 = clusterSizes.tolist()
-
-    summary = [clusterSizes1, summary1, clusterSizes2, summary2]
-
-    return jsonify (summary)
+    
+    summary2 = [dist]
+    
+    return jsonify ([summary1, summary2])
 
 @app.route('/login', methods = ['POST', 'GET'])
 def login():
@@ -339,5 +393,3 @@ def login():
 
 if __name__ == '__main__':
    app.run()
-   #process = PointProcess()
-   #print(process.locs_for_wasserstein())
