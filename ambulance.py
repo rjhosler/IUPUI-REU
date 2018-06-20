@@ -247,14 +247,16 @@ class PointProcess:
         # returns an array of coordinates and their intensity for front end (yes, currently the same as locs_for_wasserstein...)
         x_y_lam = np.empty((0,0,0))
 
+        x_y_lam = np.empty((0,0,0))
+
         for x in range(0, self._X_GRID_SIZE):
             for y in range(0, self._Y_GRID_SIZE):
                 xcoord, ycoord = self.grid_to_coord(x, y)
                 # for now just sending over lambda snapshot @ current prediction...
                 lam = self._Lam[-1][x][y]
                 to_append = xcoord, ycoord, lam
-                np.append(x_y_lam, to_append)
-        
+                x_y_lam = np.append(x_y_lam, to_append)
+
         x_y_lam = x_y_lam.reshape ((len(x_y_lam)//3,3))
         return x_y_lam
 
@@ -336,6 +338,6 @@ def login():
       return redirect(url_for('success',name = user))
 
 if __name__ == '__main__':
-   #app.run()
-   process = PointProcess()
-   print(process.locs_for_wasserstein())
+   app.run()
+   #process = PointProcess()
+   #print(process.locs_for_wasserstein())
