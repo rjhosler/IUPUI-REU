@@ -140,9 +140,9 @@ class PointProcess:
         self._F = np.load('F.npy')                      # size X_GRID_SIZE, YGRIDSIZE, len(w) 
         self._w = [.5, .1, .05]                   
         self._theta = np.load('theta.npy')              # size len(w)               
-        self._mu = np.load('mu.npy')                    # size X_GRID_SIZE, YGRIDSIZE                   
+        self._mu = np.load('mu.npy')                    # size X_GRID_SIZE, YGRIDSIZE 
+        self._last_times = pd.load('last_times.npy')    # size len(time memory)        
         self._G_times = pd.read_pickle('G_times.pkl')   # size X_GRID_SIZE, YGRIDSIZE
-        self._last_times = pd.read_pickle('last_times.npy') # size len(time memory) 
 
         if self._F.shape[0:2] == self._Lam.shape[1:3] == self._G_times.shape == self._mu.shape:
             self._X_GRID_SIZE, self._Y_GRID_SIZE = self._F.shape[0:2]
@@ -159,11 +159,11 @@ class PointProcess:
     # Assign a lat and long coordinate to a grid location. Input xcoord, ycoord as lat/long to be mapped
 
     # Extreme values taken as max and min from 10-year EMS data
-        xmin = 39.587905
-        xmax = 40.0099
+        ymin = 39.587905
+        ymax = 40.0099
 
-        ymin = -86.4619147125
-        ymax =  -85.60543100000002
+        xmin = -86.4619147125
+        xmax =  -85.60543100000002
 
         if xcoord < xmin:
             xcoord = xmin
@@ -182,11 +182,11 @@ class PointProcess:
     def grid_to_coord(self, xbin, ybin):
 
         # Extreme values taken as max and min from 10-year EMS data
-        xmin = 39.587905
-        xmax = 40.0099
+        ymin = 39.587905
+        ymax = 40.0099
 
-        ymin = -86.4619147125
-        ymax =  -85.60543100000002
+        xmin = -86.4619147125
+        xmax =  -85.60543100000002
 
         xcoord = (xbin * (xmax - xmin)) / (self._X_GRID_SIZE -1) + xmin
         ycoord = (ybin * (ymax - ymin)) / (self._Y_GRID_SIZE -1) + ymin
@@ -196,7 +196,7 @@ class PointProcess:
         # TODO track different parameters for different catagories
 
         # place new event in correct grid
-        gx, gy = self.coord_to_grid(xcoord, ycoord)
+        gx, gy = self.coord_to_grid(xcoord, ycoord)    
 
         # find global time delta and append event time to event time list
         last_global_time = self._last_times[-1]
@@ -222,6 +222,8 @@ class PointProcess:
         g_time_delta = (event_time - last_g_time).total_seconds()
         self._G_times.at[gx,gy] = event_time
 
+        if self._Lam[-1][gx][gy] == 0:
+            self._Lam[-1][gx][gy] = 1e-70
         self._mu[gx][gy] = self._mu[gx][gy] + dt * (self._mu[gx][gy]/self._Lam[-1][gx][gy] * g_time_delta)
         for k in self._K:
             self._theta[k] = self._theta[k] + dt * (self._F[gx][gy][k]/self._Lam[-1][gx][gy] - self._theta[k])
@@ -229,8 +231,9 @@ class PointProcess:
 
         #reindex last times and Lambda
         time_memory = 30    # Number of past event lambads and times to save
-        self._Lam = self._Lam[-time_memory:-1]
-        self._last_times = self._last_times[-time_memory:-1]
+        if time_memory <= min(len(self._Lam), len(self._last_times)):
+            self._Lam = self._Lam[-time_memory:]
+            self._last_times = self._last_times[[-time_memory:,:]]
 
         # could also choose to pickle everything here
         #self._G_times.to_pickle('G_times.pkl')
