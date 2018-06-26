@@ -207,7 +207,7 @@ class PointProcessTrain:
 
         start = self._data_length - num_points
         
-        lam = sum(self._Lam[start:,:])
+        lam = sum(self._Lam[start:,:])/num_points
 
         for x in range(0, self._xsize):
             for y in range(0, self._ysize):
