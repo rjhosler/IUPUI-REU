@@ -6,6 +6,7 @@ from math import *
 import datetime as datetime
 import warnings
 from numpy import unravel_index
+from sklearn.metrics import mean_squared_error
 
 class PointProcessTrain:
     #training_points is a dataframe with labels: DATE_TIME (datetime format), XCOORD, YCOORD
@@ -35,8 +36,8 @@ class PointProcessTrain:
         self._Gtimes = pd.DataFrame(np.zeros([xgridsize, ygridsize]))
         self._Gtimes[:] = self._data.DATE_TIME[0]
 
-        self._hour = np.ones(24)
-        self._day = np.ones(32)
+        self._hour = np.ones(24)*1.0/24.0
+        self._day = np.ones(7)*1.0/7.0
 
         self._save_out = save_loc
 
@@ -64,92 +65,103 @@ class PointProcessTrain:
         ycoord = (ybin * (self._ymax - self._ymin)) / (self._ysize -1) + self._ymin
         return xcoord, ycoord
 
-    def update(self, event_time, last_event_time, xcoord, ycoord, index):
-
-        self._mu[index] = self._mu[index-1]
-        self._F[index] = self._F[index-1]
-        self._theta[index] = self._theta[index-1]
-
+    def param_update(self, event_time, last_event_time, xcoord, ycoord, 
+        day_prob, hour_prob,
+        Lam, F, mu, theta, Gtimes):
 
         # place new event in correct grid
         gx, gy = self.coord_to_grid(xcoord, ycoord)  
 
         # find day and hour
-        curr_day = event_time.day
-        curr_hour = event_time.hour 
+        curr_day = event_time.weekday()
+        curr_hour = event_time.hour
 
         # find global time delta 
         time_delta = (event_time - last_event_time).total_seconds()*self._time_scale
 
         # update periodic trends
         dt_day = .05
-        for i in range(0, 32):
-            self._day[i] = (1-dt_day)*self._day[i]
-        self._day[curr_day] += dt_day
-        dt_hour = .005
+        for i in range(0, 7):
+            day_prob[i] = (1-dt_day)*day_prob[i]
+        day_prob[curr_day] += dt_day
+        dt_hour = .05
         for i in range(0, 24):
-            self._hour[i] = (1-dt_hour)*self._hour[i]
-        self._hour[curr_hour] += dt_hour 
+            hour_prob[i] = (1-dt_hour)*hour_prob[i]
+        hour_prob[curr_hour] += dt_hour 
 
         # global update of all grids
         for x in range(0, self._xsize):
             for y in range(0, self._ysize):
                 for k in range(0, self._K):
-                    self._F[index][x][y][k] = self._F[index][x][y][k] * np.exp(-1*self._w[k]*time_delta)
-                self._Lam[index][x][y] = self._mu[index][x][y] + sum(self._F[index][x][y])*self._hour[curr_hour]*self._day[curr_day]
+                    F[x][y][k] = F[x][y][k] * np.exp(-1*self._w[k]*time_delta)
+                Lam[x][y] = self.get_intensity(mu[x][y], sum(F[x][y]), hour_prob[curr_hour], day_prob[curr_day])
 
         # local update based on where event occurred
         dt = 0.005
-        g_time_delta = (event_time - self._Gtimes.at[gx,gy]).total_seconds()*self._time_scale
-        self._Gtimes.at[gx,gy] = event_time
-        if self._Lam[index][gx][gy] == 0:
-            self._Lam[index][gx][gy] = 1e-70
-        self._mu[index][gx][gy] = self._mu[index][gx][gy] + dt * (self._mu[index][gx][gy]/self._Lam[index][gx][gy] * g_time_delta)
+        g_time_delta = (event_time - Gtimes.at[gx,gy]).total_seconds()*self._time_scale
+        Gtimes.at[gx,gy] = event_time
+        if Lam[gx][gy] == 0:
+            Lam[gx][gy] = 1e-70
+        mu[gx][gy] = mu[gx][gy] + dt * (mu[gx][gy]/Lam[gx][gy] * g_time_delta)
         for k in range(0, self._K):
-            self._theta[index][k] = self._theta[index][k] + dt * (self._F[index][gx][gy][k]/self._Lam[index][gx][gy] - self._theta[index][k])
-            self._F[index][gx][gy][k] = self._F[index][gx][gy][k] + self._w[k]*self._theta[index][k]
+            theta[k] = theta[k] + dt * (F[gx][gy][k]/Lam[gx][gy] - theta[k])
+            F[gx][gy][k] = F[gx][gy][k] + self._w[k]*theta[k]
+
+        return day_prob, hour_prob, Lam, F, mu, theta, Gtimes
+
+    def get_intensity(self, mu_xy, sum_F_xy, hour_prob, day_prob):
+        Lam_xy = (mu_xy + sum_F_xy)*hour_prob*day_prob
+        return Lam_xy
 
     def train(self):
         for i in range(1, self._data_length):
-            self.update(self._data.DATE_TIME[i], self._data.DATE_TIME[i-1], self._data.XCOORD[i], self._data.YCOORD[i], i)
+
+            self._F[i] = self._F[i-1]
+            self._mu[i] = self._mu[i-1]
+            self._theta[i] = self._theta[i-1]
+
+            self._day, self._hour, self._Lam[i], self._F[i], self._mu[i], self._theta[i], self._Gtimes = self.param_update(
+                self._data.DATE_TIME[i], self._data.DATE_TIME[i-1], self._data.XCOORD[i], self._data.YCOORD[i],
+                self._day, self._hour,
+                self._Lam[i], self._F[i], self._mu[i], self._theta[i], self._Gtimes)
+        
+
         np.savez(self._save_out, Lam = self._Lam, theta = self._theta, w = self._w, 
             F = self._F, mu = self._mu, day_prob = self._day, hour_prob = self._hour,
             grid_times = self._Gtimes.values)
 
-    def param_examine(self, num_points, num_top_grids = 10):
-        theta_track = []
-        for i in range(0, self._data_length):
-            theta_track.append(sum(self._theta[i]))
-        plt.title("approx theta vs. data points")
-        plt.plot(theta_track)
-
-        start = self._data_length - num_points
-        end = self._data_length-1
-
-        print("Time period is " + str((self._data.DATE_TIME[end] - self._data.DATE_TIME[start]).total_seconds()*self._time_scale) + str(self._time_scale_label))
-
-        print("\nMax Lambda, Loc of Max Lambda, Min Lambda, Loc of Min Lambda")
-        summed_intensity = sum(self._Lam[start:,:])
-        print(np.amax(summed_intensity), unravel_index(summed_intensity.argmax(), summed_intensity.shape),
-            np.amin(summed_intensity), unravel_index(summed_intensity.argmin(), summed_intensity.shape))
-
-        print("\nMost events in grid, Location of grid with most events")
-        total_events = np.zeros([self._xsize, self._ysize])
-        for i in range(start, end):
-            x, y = self.coord_to_grid(self._data.XCOORD[i], self._data.YCOORD[i])
-            total_events[x][y] = total_events[x][y] + 1
-        print(np.amax(total_events), unravel_index(total_events.argmax(), total_events.shape))
+    def param_examine(self):
+        for i in range(0, self._K):
+            plt.plot(np.transpose(self._theta)[i], label="w = " + str(self._w[i]))
+        plt.title("theta vs. data points")
+        plt.legend()
+        plt.show()
 
         print("\nHour vector: ")
         print(self._hour)
         print("Day vector: ")
         print(self._day)
 
+    def top_events_all_averaged(self, num_points, num_top_grids = 10):
         # examine how top predicted cells compare to actual top cells
-        tot_intensity_copy = np.copy(summed_intensity)
+
+        start = self._data_length - num_points
+        end = self._data_length-1
+
+        sum_intensity = sum(self._Lam[start:,:])
+        print(np.amax(sum_intensity), unravel_index(sum_intensity.argmax(), sum_intensity.shape),
+            np.amin(sum_intensity), unravel_index(sum_intensity.argmin(), sum_intensity.shape))
+
+        tot_events = np.zeros([self._xsize, self._ysize])
+        for i in range(start, end):
+            x, y = self.coord_to_grid(self._data.XCOORD[i], self._data.YCOORD[i])
+            tot_events[x][y] = tot_events[x][y] + 1
+        print(np.amax(tot_events), unravel_index(tot_events.argmax(), tot_events.shape))
+
+        sum_intensity_copy = np.copy(sum_intensity)
         pred_locs = []
 
-        tot_events_copy = np.copy(total_events)
+        tot_events_copy = np.copy(tot_events)
         actual_locs = []
 
         for i in range(0, num_top_grids):
@@ -158,29 +170,64 @@ class PointProcessTrain:
             tot_events_copy[indx[0]][indx[1]] = 0
 
         for i in range(0, num_top_grids):
-            indx = unravel_index(tot_intensity_copy.argmax(), tot_intensity_copy.shape)
+            indx = unravel_index(sum_intensity_copy.argmax(), sum_intensity_copy.shape)
             pred_locs.append(indx)
-            tot_intensity_copy[indx[0]][indx[1]] = 0
+            sum_intensity_copy[indx[0]][indx[1]] = 0
+
+        print("Time period is " + str((self._data.DATE_TIME[end] - self._data.DATE_TIME[start]).total_seconds()*self._time_scale) + " " + str(self._time_scale_label))
 
         print("\nTop model hotspots in real top 10:")
         for i in range(0, num_top_grids):
             if pred_locs[i] in actual_locs:
-                predicted_number = summed_intensity[pred_locs[i][0]][pred_locs[i][1]]*(1/num_points*(self._data.DATE_TIME[end]-self._data.DATE_TIME[start]).total_seconds()*self._time_scale)
-                print("Grid: " + str(pred_locs[i]) +", Model: "+ str(predicted_number)+", Real: "+ str(int(total_events[pred_locs[i][0]][pred_locs[i][1]])))
+                predicted_number = sum_intensity[pred_locs[i][0]][pred_locs[i][1]]*(1/num_points*(self._data.DATE_TIME[end]-self._data.DATE_TIME[start]).total_seconds()*self._time_scale)
+                print("Grid: " + str(pred_locs[i]) +", Model: "+ str(predicted_number)+", Real: "+ str(int(tot_events[pred_locs[i][0]][pred_locs[i][1]])))
 
         print("\nTop model hotstpots not in real top 10")
         for i in range(0, num_top_grids):
             if pred_locs[i] not in actual_locs:
-                predicted_number = summed_intensity[pred_locs[i][0]][pred_locs[i][1]]*(1/num_points*(self._data.DATE_TIME[end]-self._data.DATE_TIME[start]).total_seconds()*self._time_scale)
-                print("Grid: " + str(pred_locs[i]) +", Model: "+ str(predicted_number)+", Real: "+ str(int(total_events[pred_locs[i][0]][pred_locs[i][1]])))
+                predicted_number = sum_intensity[pred_locs[i][0]][pred_locs[i][1]]*(1/num_points*(self._data.DATE_TIME[end]-self._data.DATE_TIME[start]).total_seconds()*self._time_scale)
+                print("Grid: " + str(pred_locs[i]) +", Model: "+ str(predicted_number)+", Real: "+ str(int(tot_events[pred_locs[i][0]][pred_locs[i][1]])))
 
         print("\nReal top 10 hotspots not predicted by model")
         for i in range(0, num_top_grids):
             if actual_locs[i] not in pred_locs:
-                predicted_number = summed_intensity[actual_locs[i][0]][actual_locs[i][1]]*(1/num_points*(self._data.DATE_TIME[end]-self._data.DATE_TIME[start]).total_seconds()*self._time_scale)
-                print("Grid: " + str(actual_locs[i]) +", Model: "+ str(predicted_number)+", Real: "+ str(int(total_events[actual_locs[i][0]][actual_locs[i][1]])))
+                predicted_number = sum_intensity[actual_locs[i][0]][actual_locs[i][1]]*(1/num_points*(self._data.DATE_TIME[end]-self._data.DATE_TIME[start]).total_seconds()*self._time_scale)
+                print("Grid: " + str(actual_locs[i]) +", Model: "+ str(predicted_number)+", Real: "+ str(int(tot_events[actual_locs[i][0]][actual_locs[i][1]])))
 
+    def predict(self, time_delta, future_hour, future_day):
 
-class PointProcess:
-    def __init__(self):
         pass
+
+    def pia(self, test_points, time_step, time_scale):
+        # test points = dataframe with labels DATE_TIME (datetime format), XCOORD, YCOORD
+        pass
+
+    def test_locs_for_wasserstein(self, num_points = 100):
+        x_y_lam = np.empty((0,0,0))
+
+        start = self._data_length - num_points
+        
+        lam = sum(self._Lam[start:,:])
+
+        for x in range(0, self._xsize):
+            for y in range(0, self._ysize):
+                xcoord, ycoord = self.grid_to_coord(x, y)
+                to_append = xcoord, ycoord, lam[x][y]
+                x_y_lam = np.append(x_y_lam, to_append)
+
+        x_y_lam = x_y_lam.reshape ((len(x_y_lam)//3,3))
+        return x_y_lam
+
+
+class PointProcessRun:
+    def __init__(self, trained_params):
+        pass
+    def update(self):
+        pass
+    def locs_for_wasserstein(self):
+        pass
+    def num_events_pred(self):
+        pass
+    def intensity_snapshot(self):
+        pass
+
