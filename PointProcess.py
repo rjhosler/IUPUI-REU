@@ -14,7 +14,7 @@ class PointProcessTrain:
     #time_step selects multiplier for dt
     def __init__ (self, training_points, xgridsize = 100, ygridsize = 100, 
         xmin = -86.4619147125, xmax =  -85.60543100000002, ymin = 39.587905, ymax = 40.0099, 
-        w = [.5, .1, .05], time_scale_label = 'days', 
+        w = [.5, .1, .05], time_scale_label = '15minutes', 
         save_loc = 'Trained_Params.npz'):
         
         self._data = training_points 
@@ -42,7 +42,7 @@ class PointProcessTrain:
         self._save_out = save_loc
 
         self._time_scale_label = time_scale_label
-        self._time_scaling_lookup = {'days': 1.15741e-5, 'hours': 0.0002777784, 'minutes': 0.016666704, 'seconds': 1}
+        self._time_scaling_lookup = {'days': 1.15741e-5, 'hours': 0.0002777784, '15minutes': 0.001111111, 'minutes': 0.016666704, 'seconds': 1}
         self._time_scale = self._time_scaling_lookup[self._time_scale_label]
 
     def coord_to_grid(self, xcoord, ycoord):
@@ -103,7 +103,7 @@ class PointProcessTrain:
         Gtimes.at[gx,gy] = event_time
         if Lam[gx][gy] == 0:
             Lam[gx][gy] = 1e-70
-        mu[gx][gy] = mu[gx][gy] + dt * (mu[gx][gy]/Lam[gx][gy] * g_time_delta)
+        mu[gx][gy] = mu[gx][gy] + dt * (mu[gx][gy]/Lam[gx][gy] - mu[gx][gy] * g_time_delta)
         for k in range(0, self._K):
             theta[k] = theta[k] + dt * (F[gx][gy][k]/Lam[gx][gy] - theta[k])
             F[gx][gy][k] = F[gx][gy][k] + self._w[k]*theta[k]
@@ -127,9 +127,11 @@ class PointProcessTrain:
                 self._Lam[i], self._F[i], self._mu[i], self._theta[i], self._Gtimes)
         
 
+
         np.savez(self._save_out, Lam = self._Lam, theta = self._theta, w = self._w, 
             F = self._F, mu = self._mu, day_prob = self._day, hour_prob = self._hour,
-            grid_times = self._Gtimes.values)
+            grid_times = self._Gtimes.values, time_scale = self._time_scale_label, 
+            grid_info = [self._xsize, self._ysize, self._xmin, self._xmax, self._ymin, self._ymax])
 
     def param_examine(self):
         for i in range(0, self._K):
@@ -204,6 +206,7 @@ class PointProcessTrain:
         future_day =  future_time.weekday()
 
         decayed_F_xy = np.zeros(3)
+
         pred_Lam = np.zeros([self._xsize, self._ysize])
         for x in range(0, self._xsize):
             for y in range(0, self._ysize):
@@ -217,33 +220,31 @@ class PointProcessTrain:
         # // Attempting to predict over intervals. Currently a work in progress. Not updating parameters as events occur.
 
         time_period = (test_points.DATE_TIME[len(test_points)-1] - test_points.DATE_TIME[0]).total_seconds()
+
         # get everything in seconds to find number of periods to model
         time_increment = time_increment/self._time_scaling_lookup[increment_scale]   # convert time increment to seconds if it wasn't already. 
         num_periods = ceil(time_period/time_increment)                               # number of predictions to run at time_increment value each
+        intensity_fraction = time_increment/(1/self._time_scale)                       # intensity will be calculated as #/time_scale. Need it to be #/time_increment
 
-        print("Predicting over time of " + str(time_period*self._time_scale) +" " + str(self._time_scale_label) +  ". Generating " + str(num_periods) + " intensity prediction(s)")
+        print("Predicting over time of " + str(time_period*self._time_scale) + " " + str(self._time_scale_label) + ". Generating " + str(num_periods) + " intensity prediction(s)")
+
         #initialize intensity predictions 
         intensity_predictions = np.zeros([self._xsize, self._ysize])
         for i in range(0, num_periods):
             future_time = test_points.DATE_TIME[0] + datetime.timedelta(seconds=time_increment*i)
-            intensity = self.predict(future_time)
+            intensity = self.predict(future_time)   #predict returns #/time_scale. Need the correct fraction of that. 
             # if intensity_predictions has been "initialized", start tacking on predictions for later summation
-            # because don't know how else to do so, subtract previous prediction from current one to mimic predicting over time intervals
             if intensity_predictions.any():
-                intensity = intensity - previous_intensity
-                previous_intensity = np.copy(intensity)
                 intensity_predictions = np.dstack((intensity_predictions, intensity))
             # otherwise "initialize" intensity_predictions
             elif not intensity_predictions.any():
                 intensity_predictions = np.copy(intensity)
-                previous_intensity = np.copy(intensity)
-
 
         # sum to get prediction over total time of test_points
         if num_periods > 1:
             pred_num_events = intensity_predictions.sum(axis=2)*time_period*self._time_scale
         else:
-            pred_num_events = intensity_predictions*time_period*self._time_scale
+            pred_num_events = intensity_predictions*time_period*time_period*self._time_scale
 
 
         # find location of num_hotspots predicted hotspots
