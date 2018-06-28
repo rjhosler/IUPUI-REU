@@ -125,7 +125,8 @@ class PointProcessTrain:
                 self._data.DATE_TIME[i], self._data.DATE_TIME[i-1], self._data.XCOORD[i], self._data.YCOORD[i],
                 self._day, self._hour,
                 self._Lam[i], self._F[i], self._mu[i], self._theta[i], self._Gtimes)
-        
+            if (i % 50 == 0):
+                print (i / self._data_length, "on way")
 
 
         np.savez(self._save_out, Lam = self._Lam, theta = self._theta, w = self._w, 
@@ -212,7 +213,7 @@ class PointProcessTrain:
             for y in range(0, self._ysize):
                 for k in range(0, self._K):
                     decayed_F_xy[k] = self._F[-1][x][y][k]*np.exp(-self._w[k]*time_delta)
-                pred_Lam[x][y] = self.get_intensity(self._mu[-1][x][y], sum(decayed_F_xy), self._hour[future_hour], self._day[future_day])
+                pred_Lam[x][y] = self.get_intensity(self._mu[-1][x][y], sum(decayed_F_xy) / len(decayed_F_xy), self._hour[future_hour], self._day[future_day])
         return pred_Lam
 
     def simulate_no_update(self, test_points, num_hotspots = 10, time_increment = 900, increment_scale = 'seconds'):
@@ -222,9 +223,9 @@ class PointProcessTrain:
         time_period = (test_points.DATE_TIME[len(test_points)-1] - test_points.DATE_TIME[0]).total_seconds()
 
         # get everything in seconds to find number of periods to model
-        time_increment = time_increment/self._time_scaling_lookup[increment_scale]   # convert time increment to seconds if it wasn't already. 
-        num_periods = ceil(time_period/time_increment)                               # number of predictions to run at time_increment value each
-        intensity_fraction = time_increment/(1/self._time_scale)                       # intensity will be calculated as #/time_scale. Need it to be #/time_increment
+        time_increment = time_increment/self._time_scaling_lookup[increment_scale]  # convert time increment to seconds if it wasn't already. 
+        num_periods = ceil(time_period/time_increment)                              # number of predictions to run at time_increment value each
+        intensity_fraction = time_increment/(1/self._time_scale)                    # intensity will be calculated as #/time_scale. Need it to be #/time_increment
 
         print("Predicting over time of " + str(time_period*self._time_scale) + " " + str(self._time_scale_label) + ". Generating " + str(num_periods) + " intensity prediction(s)")
 
@@ -244,7 +245,7 @@ class PointProcessTrain:
         if num_periods > 1:
             pred_num_events = intensity_predictions.sum(axis=2)*time_period*self._time_scale
         else:
-            pred_num_events = intensity_predictions*time_period*time_period*self._time_scale
+            pred_num_events = intensity_predictions*time_period*self._time_scale
 
 
         # find location of num_hotspots predicted hotspots
