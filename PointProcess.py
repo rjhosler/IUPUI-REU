@@ -101,23 +101,29 @@ class PointProcessTrain:
             for y in range(0, self._ysize):
                 for k in range(0, self._K):
                     F[x][y][k] = F[x][y][k] * np.exp(-1*self._w[k]*time_delta)
-                Lam[x][y] = self.get_intensity(mu[x][y], sum(F[x][y]), hour_prob[curr_hour], day_prob[curr_day])
+                Lam[x][y] = self.get_intensity(mu[x][y], sum(F[x][y]), hour_prob[curr_hour], day_prob[curr_day], time_weighted = True)
 
         # local update based on where event occurred
         dt = 0.005
         g_time_delta = (event_time - Gtimes.at[gx,gy]).total_seconds()*self._time_scale
         Gtimes.at[gx,gy] = event_time
-        if Lam[gx][gy] == 0:
-            Lam[gx][gy] = 1e-70
-        mu[gx][gy] = mu[gx][gy] + dt * (mu[gx][gy]/Lam[gx][gy] - mu[gx][gy] * g_time_delta)
+
+        Lam_g = self.get_intensity(mu[gx][gy], sum(F[gx][gy]), hour_prob[curr_hour], day_prob[curr_day], time_weighted = True)
+        if Lam_g == 0:
+            Lam_g = 1e-70
+        mu[gx][gy] = mu[gx][gy] + dt * (mu[gx][gy]/Lam_g - mu[gx][gy] * g_time_delta)
         for k in range(0, self._K):
-            theta[k] = theta[k] + dt * (F[gx][gy][k]/Lam[gx][gy] - theta[k])
+            theta[k] = theta[k] + dt * (F[gx][gy][k]/Lam_g - theta[k])
             F[gx][gy][k] = F[gx][gy][k] + self._w[k]*theta[k]
 
         return day_prob, hour_prob, Lam, F, mu, theta, Gtimes, last_event_time
 
-    def get_intensity(self, mu_xy, sum_F_xy, hour_prob, day_prob):
-        Lam_xy = (mu_xy + sum_F_xy)*hour_prob*day_prob
+    def get_intensity(self, mu_xy, sum_F_xy, hour_prob, day_prob, time_weighted):
+        # get intensity. time_weighted = boolean 
+        if time_weighted:
+            Lam_xy = (mu_xy + sum_F_xy)*hour_prob*day_prob
+        elif not time_weighted:
+            Lam_xy = (mu_xy + sum_F_xy)
         return Lam_xy
 
     def train(self):
@@ -258,7 +264,7 @@ class PointProcessRun(PointProcessTrain):
             for y in range(0, self._ysize):
                 for k in range(0, self._K):
                     decayed_F_xy[k] = self._F[-1][x][y][k]*np.exp(-self._w[k]*time_delta)  
-                pred_Lam[x][y] = self.get_intensity(self._mu[-1][x][y], sum(decayed_F_xy), self._hour[future_hour], 1/7)#self._day[future_day])
+                pred_Lam[x][y] = self.get_intensity(self._mu[-1][x][y], sum(decayed_F_xy), self._hour[future_hour], self._day[future_day], time_weighted = True)
         return pred_Lam
 
     def test_projection(self, test_points, num_hotspots = 10):
