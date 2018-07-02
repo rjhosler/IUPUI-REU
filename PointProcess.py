@@ -14,7 +14,7 @@ class PointProcessTrain:
     #time_step selects multiplier for dt
     def __init__ (self, training_points, xgridsize = 100, ygridsize = 100, 
         xmin = -86.4619147125, xmax =  -85.60543100000002, ymin = 39.587905, ymax = 40.0099, 
-        w = [.5, .1, .05], time_scale_label = '15minutes', 
+        w = [.5, .1, .05], time_scale_label = 'days', pred_interval_label = '15minutes', 
         save_loc = 'Trained_Params.npz'):
         
         self._data = training_points 
@@ -36,14 +36,17 @@ class PointProcessTrain:
         self._Gtimes[:] = self._data.DATE_TIME[0]
         self._LastTime = self._data.DATE_TIME[0]
 
-        self._day = np.ones(7)*1/7
-        self._hour = np.ones(24)*1/24
-
         self._save_out = save_loc
 
         self._time_scale_label = time_scale_label
         self._time_scaling_lookup = {'days': 1.15741e-5, 'hours': 0.0002777784, '15minutes': 0.001111111, 'minutes': 0.016666704, 'seconds': 1}
         self._time_scale = self._time_scaling_lookup[self._time_scale_label]
+
+        self._day = np.ones(7)*1/7
+        self._pred_interval_label = pred_interval_label
+        self._hour_vector_subdivision_lookup = {'hours': 1, '15minutes': 4, 'minutes': 60}
+        self._hour_subdivision = self._hour_vector_subdivision_lookup[pred_interval_label]
+        self._hour = np.ones(24*self._hour_subdivision)*1/(24*self._hour_subdivision)
 
     def coord_to_grid(self, xcoord, ycoord):
         if xcoord < self._xmin:
@@ -65,6 +68,9 @@ class PointProcessTrain:
         ycoord = (ybin * (self._ymax - self._ymin)) / (self._ysize -1) + self._ymin
         return xcoord, ycoord
 
+    def get_hour_vec_indx(self, event_time):
+        return event_time.hour*self._hour_subdivision + floor(event_time.minute/(60/self._hour_subdivision))
+
     def param_update(self, event_time, last_event_time, xcoord, ycoord, 
         day_prob, hour_prob,
         Lam, F, mu, theta, Gtimes):
@@ -74,18 +80,18 @@ class PointProcessTrain:
 
         # find day and hour
         curr_day = event_time.weekday()
-        curr_hour = event_time.hour
+        curr_hour = self.get_hour_vec_indx(event_time)
 
         # find global time delta 
         time_delta = (event_time - last_event_time).total_seconds()*self._time_scale
         last_event_time = event_time
 
         # update periodic trends
-        dt_day = .05
+        dt_day = 0.0005
         for i in range(0, 7):
             day_prob[i] = (1-dt_day)*day_prob[i]
         day_prob[curr_day] += dt_day
-        dt_hour = .005
+        dt_hour = .000005
         for i in range(0, 24):
             hour_prob[i] = (1-dt_hour)*hour_prob[i]
         hour_prob[curr_hour] += dt_hour 
@@ -130,7 +136,7 @@ class PointProcessTrain:
             F = self._F, mu = self._mu, day_prob = self._day, hour_prob = self._hour,
             grid_times = self._Gtimes.values, time_scale = self._time_scale_label, 
             grid_info = [self._xsize, self._ysize, self._xmin, self._xmax, self._ymin, self._ymax],
-            last_time = self._LastTime)
+            last_time = self._LastTime, pred_interval_hourly_subdivision = self._hour_subdivision)
 
     def param_examine(self):
         for i in range(0, self._K):
@@ -141,8 +147,12 @@ class PointProcessTrain:
 
         print("\nHour vector: ")
         print(self._hour)
-        print("Day vector: ")
+        print("Hour vector sum: ")
+        print(sum(self._hour))
+        print("\nDay vector: ")
         print(self._day)
+        print("Day vector sum: ")
+        print(sum(self._day))
 
     def model_hotspot_examine(self, num_points, num_hotspots = 10):
         # examine how top model cells compare to actual top cells over data used for training
@@ -183,20 +193,26 @@ class PointProcessTrain:
         print("\nTrained hotspots in real top " + str(num_hotspots))
         for i in range(0, num_hotspots):
             if pred_locs[i] in actual_locs:
-                predicted_number = sum_intensity[pred_locs[i][0]][pred_locs[i][1]]*(1/num_points*(self._data.DATE_TIME[end]-self._data.DATE_TIME[start]).total_seconds()*self._time_scale)
-                print("Grid: " + str(pred_locs[i]) +", Model: "+ str(predicted_number)+", Real: "+ str(int(tot_events[pred_locs[i][0]][pred_locs[i][1]])))
+                x = pred_locs[i][0]
+                y = pred_locs[i][1]
+                predicted_number = sum_intensity[x][y]*(1/num_points*(self._data.DATE_TIME[end]-self._data.DATE_TIME[start]).total_seconds()*self._time_scaling_lookup[self._pred_interval_label])
+                print("Grid: " + str(pred_locs[i]) +", Model: "+ str(predicted_number)+", Real: "+ str(int(tot_events[x][y])) )
 
         print("\nTrained hotstpots not in real top " + str(num_hotspots))
         for i in range(0, num_hotspots):
             if pred_locs[i] not in actual_locs:
-                predicted_number = sum_intensity[pred_locs[i][0]][pred_locs[i][1]]*(1/num_points*(self._data.DATE_TIME[end]-self._data.DATE_TIME[start]).total_seconds()*self._time_scale)
-                print("Grid: " + str(pred_locs[i]) +", Model: "+ str(predicted_number)+", Real: "+ str(int(tot_events[pred_locs[i][0]][pred_locs[i][1]])))
+                x = pred_locs[i][0]
+                y = pred_locs[i][1] 
+                predicted_number = sum_intensity[x][y]*(1/num_points*(self._data.DATE_TIME[end]-self._data.DATE_TIME[start]).total_seconds()*self._time_scaling_lookup[self._pred_interval_label])
+                print("Grid: " + str(pred_locs[i]) +", Model: "+ str(predicted_number)+", Real: "+ str(int(tot_events[x][y])) )
 
         print("\nReal top " + str(num_hotspots) +" hotspots not in trained model")
         for i in range(0, num_hotspots):
             if actual_locs[i] not in pred_locs:
-                predicted_number = sum_intensity[actual_locs[i][0]][actual_locs[i][1]]*(1/num_points*(self._data.DATE_TIME[end]-self._data.DATE_TIME[start]).total_seconds()*self._time_scale)
-                print("Grid: " + str(actual_locs[i]) +", Model: "+ str(predicted_number)+", Real: "+ str(int(tot_events[actual_locs[i][0]][actual_locs[i][1]])))
+                x = actual_locs[i][0]
+                y = actual_locs[i][1]
+                predicted_number = sum_intensity[x][y]*(1/num_points*(self._data.DATE_TIME[end]-self._data.DATE_TIME[start]).total_seconds()*self._time_scaling_lookup[self._pred_interval_label])
+                print("Grid: " + str(actual_locs[i]) +", Model: "+ str(predicted_number)+", Real: "+ str(int(tot_events[x][y])) )
 
    
 class PointProcessRun(PointProcessTrain):
@@ -219,6 +235,8 @@ class PointProcessRun(PointProcessTrain):
         self._time_scaling_lookup = {'days': 1.15741e-5, 'hours': 0.0002777784, '15minutes': 0.001111111, 'minutes': 0.016666704, 'seconds': 1}
         self._time_scale = self._time_scaling_lookup[self._time_scale_label]
 
+        self._hour_subdivision = int(trained_params['pred_interval_hourly_subdivision'])
+
         self._xsize = int(trained_params['grid_info'][0])
         self._ysize = int(trained_params['grid_info'][1])
         self._xmin = float(trained_params['grid_info'][2])
@@ -226,12 +244,11 @@ class PointProcessRun(PointProcessTrain):
         self._ymin = float(trained_params['grid_info'][4])
         self._ymax = float(trained_params['grid_info'][5])
 
-
     def future_intensity(self, future_time):
 
         time_delta = (future_time - self._LastTime).total_seconds()*self._time_scale
 
-        future_hour = future_time.hour
+        future_hour = self.get_hour_vec_indx(future_time) 
         future_day =  future_time.weekday()
 
         decayed_F_xy = np.zeros(3)
@@ -240,32 +257,28 @@ class PointProcessRun(PointProcessTrain):
         for x in range(0, self._xsize):
             for y in range(0, self._ysize):
                 for k in range(0, self._K):
-                    decayed_F_xy[k] = self._F[-1][x][y][k]*np.exp(-self._w[k]*time_delta)
-                pred_Lam[x][y] = self.get_intensity(self._mu[-1][x][y], sum(decayed_F_xy), self._hour[future_hour], self._day[future_day])
+                    decayed_F_xy[k] = self._F[-1][x][y][k]*np.exp(-self._w[k]*time_delta)  
+                pred_Lam[x][y] = self.get_intensity(self._mu[-1][x][y], sum(decayed_F_xy), self._hour[future_hour], 1/7)#self._day[future_day])
         return pred_Lam
 
     def test_projection(self, test_points, num_hotspots = 10):
         # test points is a data frame with labels DATE_TIME (datetime format), XCOORD, YCOORD
-        #// Attempting to predict over intervals.
         time_period = (test_points.DATE_TIME[len(test_points)-1] - test_points.DATE_TIME[0]).total_seconds()
 
         # get everything in seconds to find number of periods to model
-        time_increment = 1/self._time_scale                                          # convert time increment to seconds 
-        num_periods = ceil(time_period/time_increment)                               # number of predictions to run at time_increment value each
-
-        print("Intensities are in units of #/" + str(self._time_scale_label))# + " Need a fraction of each to correctly add: " +str(intensity_fraction))
-
+        time_increment = (1 / self._hour_subdivision)/self._time_scaling_lookup['hours']           # convert time increment to seconds
+        num_periods = ceil(time_period/time_increment)                                              # number of predictions to run at time_increment value each
         print("\nPredicting over time of " + str(time_period*self._time_scale) + " " + str(self._time_scale_label) + ". Generating " + str(num_periods) + " intensity prediction(s)")
 
         intensity_predictions = np.zeros([num_periods, self._xsize, self._ysize])
         for i in range(0, num_periods):
             future_time = test_points.DATE_TIME[0] + datetime.timedelta(seconds = time_increment*i)
-            intensity = self.future_intensity(future_time)   #predict returns #/time_scale. Need the correct fraction of that.
+            intensity = self.future_intensity(future_time)   
             intensity_predictions[i] = intensity
 
         # sum to get prediction over total time of test_points
-        pred_num_events = sum(intensity_predictions[:,:])*time_period*self._time_scale
-        
+        pred_num_events = sum(intensity_predictions[:,:])
+
         # fiid location of num_hotspots predicted hotspots
         c_pred_num_events = np.copy(pred_num_events)
         pred_locs = []
@@ -309,7 +322,7 @@ class PointProcessRun(PointProcessTrain):
                 y = actual_locs[i][1]
                 print("Grid: " + str(actual_locs[i]) +", Model: "+ str(pred_num_events[x][y]) + ", Real: " + str(tot_events[x][y]))
 
-        return intensity_predictions, pred_num_events
+        return intensity_predictions
 
     def test_locs_for_wasserstein(self, num_points = 100):
         x_y_lam = np.empty((0,0,0))
