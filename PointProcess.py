@@ -90,7 +90,7 @@ class PointProcessTrain:
             hour_prob[i] = (1-dt_hour)*hour_prob[i]
         hour_prob[curr_hour] += dt_hour 
 
-        # global update of all grids
+        # global update of all grids: decay _F and get intensity
         for x in range(0, self._xsize):
             for y in range(0, self._ysize):
                 for k in range(0, self._K):
@@ -221,13 +221,14 @@ class PointProcessRun(PointProcessTrain):
 
         self._xsize = int(trained_params['grid_info'][0])
         self._ysize = int(trained_params['grid_info'][1])
-        self._xmin = int(trained_params['grid_info'][2])
-        self._xmax = int(trained_params['grid_info'][3])
-        self._ymin = int(trained_params['grid_info'][4])
-        self._ymax = int(trained_params['grid_info'][5])
+        self._xmin = float(trained_params['grid_info'][2])
+        self._xmax = float(trained_params['grid_info'][3])
+        self._ymin = float(trained_params['grid_info'][4])
+        self._ymax = float(trained_params['grid_info'][5])
 
 
     def future_intensity(self, future_time):
+
         time_delta = (future_time - self._LastTime).total_seconds()*self._time_scale
 
         future_hour = future_time.hour
@@ -240,71 +241,32 @@ class PointProcessRun(PointProcessTrain):
             for y in range(0, self._ysize):
                 for k in range(0, self._K):
                     decayed_F_xy[k] = self._F[-1][x][y][k]*np.exp(-self._w[k]*time_delta)
-                #pred_Lam[x][y] = self.get_intensity(self._mu[-1][x][y], sum(decayed_F_xy), self._hour[future_hour], self._day[future_day])
-                pred_Lam[x][y] = self.get_intensity(self._mu[-1][x][y], sum(decayed_F_xy) / len(decayed_F_xy), self._hour[future_hour], self._day[future_day])
+                pred_Lam[x][y] = self.get_intensity(self._mu[-1][x][y], sum(decayed_F_xy), self._hour[future_hour], self._day[future_day])
         return pred_Lam
 
-    def test_projection(self, test_points, num_hotspots = 10, time_increment = 900, increment_scale = 'seconds'):
+    def test_projection(self, test_points, num_hotspots = 10):
         # test points is a data frame with labels DATE_TIME (datetime format), XCOORD, YCOORD
-        # // Attempting to predict over intervals. Currently a work in progress. Not updating parameters as events occur.
-
-        #time_period = int((test_points.DATE_TIME[len(test_points)-1] - test_points.DATE_TIME[0]).total_seconds()*self._time_scale)
-
-        # get everything in seconds to find number of periods to model
-        #time_increment = time_increment/self._time_scaling_lookup[increment_scale]   # convert time increment to seconds if it wasn't already. 
-        #num_periods = ceil(time_period/time_increment)                               # number of predictions to run at time_increment value each
-        #intensity_fraction = time_increment/(1/self._time_scale)                       # intensity will be calculated as #/time_scale. Need it to be #/time_increment
-
-        #print("Intensities are in units of #/" + str(self._time_scale_label) + " Need a fraction of each to correctly add: " +str(intensity_fraction))
-
-        #print("\nPredicting over time of " + str(time_period*self._time_scale) + " " + str(self._time_scale_label) + ". Generating " + str(num_periods) + " intensity prediction(s)")
-
-        #intensity_predictions = np.zeros([time_period, self._xsize, self._ysize])
-        #for i in range(0, time_period):
-                    #initialize intensity predictions 
-        #    future_time = test_points.DATE_TIME[0] + datetime.timedelta(i/self._time_scale)
-        #    intensity = self.predict(future_time)   #predict returns #/time_scale. Need the correct fraction of that.
-        #    intensity_predictions[i] = intensity
-            # if intensity_predictions has been "initialized", start tacking on predictions for later summation
-            #if intensity_predictions.any():
-            #    intensity_predictions = np.dstack((intensity_predictions, intensity*intensity_fraction))
-            # otherwise "initialize" intensity_predictions
-            #elif not intensity_predictions.any():
-            #    intensity_predictions = np.copy(intensity*intensity_fraction)
-
-        # sum to get prediction over total time of test_points
-        #pred_num_events = (sum(intensity_predictions[:,:]))*time_period*self._time_scale
-        #print(pred_num_events)
-        #print(sum(intensity_predictions[:,:]))
-
+        #// Attempting to predict over intervals.
         time_period = (test_points.DATE_TIME[len(test_points)-1] - test_points.DATE_TIME[0]).total_seconds()
 
         # get everything in seconds to find number of periods to model
-        time_increment = time_increment/self._time_scaling_lookup[increment_scale]  # convert time increment to seconds if it wasn't already. 
-        num_periods = ceil(time_period/time_increment)                              # number of predictions to run at time_increment value each
-        intensity_fraction = time_increment/(1/self._time_scale)                    # intensity will be calculated as #/time_scale. Need it to be #/time_increment
+        time_increment = 1/self._time_scale                                          # convert time increment to seconds 
+        num_periods = ceil(time_period/time_increment)                               # number of predictions to run at time_increment value each
 
-        print("Predicting over time of " + str(time_period*self._time_scale) + " " + str(self._time_scale_label) + ". Generating " + str(num_periods) + " intensity prediction(s)")
+        print("Intensities are in units of #/" + str(self._time_scale_label))# + " Need a fraction of each to correctly add: " +str(intensity_fraction))
 
-        #initialize intensity predictions 
-        intensity_predictions = np.zeros([self._xsize, self._ysize])
+        print("\nPredicting over time of " + str(time_period*self._time_scale) + " " + str(self._time_scale_label) + ". Generating " + str(num_periods) + " intensity prediction(s)")
+
+        intensity_predictions = np.zeros([num_periods, self._xsize, self._ysize])
         for i in range(0, num_periods):
-            future_time = test_points.DATE_TIME[0] + datetime.timedelta(seconds=time_increment*i)
-            intensity = self.future_intensity(future_time)    
-            # if intensity_predictions has been "initialized", start tacking on predictions for later summation
-            if intensity_predictions.any():
-                intensity_predictions = np.dstack((intensity_predictions, intensity))
-            # otherwise "initialize" intensity_predictions
-            elif not intensity_predictions.any():
-                intensity_predictions = np.copy(intensity)
+            future_time = test_points.DATE_TIME[0] + datetime.timedelta(seconds = time_increment*i)
+            intensity = self.future_intensity(future_time)   #predict returns #/time_scale. Need the correct fraction of that.
+            intensity_predictions[i] = intensity
 
         # sum to get prediction over total time of test_points
-        if num_periods > 1:
-            pred_num_events = intensity_predictions.sum(axis=2)*time_period*self._time_scale
-        else:
-            pred_num_events = intensity_predictions*time_period*self._time_scale
-
-        # find location of num_hotspots predicted hotspots
+        pred_num_events = sum(intensity_predictions[:,:])*time_period*self._time_scale
+        
+        # fiid location of num_hotspots predicted hotspots
         c_pred_num_events = np.copy(pred_num_events)
         pred_locs = []
         for i in range(0, num_hotspots):
@@ -347,7 +309,7 @@ class PointProcessRun(PointProcessTrain):
                 y = actual_locs[i][1]
                 print("Grid: " + str(actual_locs[i]) +", Model: "+ str(pred_num_events[x][y]) + ", Real: " + str(tot_events[x][y]))
 
-        return intensity_predictions
+        return intensity_predictions, pred_num_events
 
     def test_locs_for_wasserstein(self, num_points = 100):
         x_y_lam = np.empty((0,0,0))
