@@ -129,6 +129,7 @@ def emergencies():
     interval_count = request.args.get('interval_count')
     if (request.args.get('time_interval')):
         time_interval = request.args.get('time_interval')
+        time_interval = int(time_interval)
     else:
         time_interval = 15
  
@@ -138,8 +139,8 @@ def emergencies():
     
     #for now, generate 100 fake locations        
     for j in range (int(interval_count)):
-        loc = np.zeros((100,3))
-        for i in range (100):
+        loc = np.zeros((5,3))
+        for i in range (5):
             loc [i,0] = np.random.uniform(lonmin, lonmax)
             loc [i,1] = np.random.uniform(latmin, latmax)
             loc [i,2] = np.random.uniform(0, 1)
@@ -149,59 +150,54 @@ def emergencies():
             'interval_length': time_interval
         }
 
-        for i in range (len(loc)):
-            if ('emergencies' in output):
-                output ['emergencies'].update ({
-                    'intensity': loc[i,2],
-                    'location': {
-                        'lat': loc [i,0],
-                        'long': loc [i,1]
-                        }
-                })
-            else:
-                output ['emergencies'] = {
-                    'intensity': loc[i,2],
-                    'location': {
-                        'lat': loc [i,0],
-                        'long': loc [i,1]
-                        }
+        output ['emergencies'] = {
+            'intensity': loc[:,2].tolist(),
+            'location': {
+                'lat': loc [:,1].tolist(),
+                'long': loc [:,0].tolist()
                 }
+        }
         total_output.append (output)
     return jsonify(total_output)
 
 @app.route('/assignments', methods = ['POST'])
 def assignments():
     if (request.method == 'POST'):
+        lonmin = -86.4619147125; lonmax =  -85.60543100000002; latmin = 39.587905; latmax = 40.0099;
+        em_data = np.zeros((20,2))
+        for i in range (len(em_data)):
+            em_data [i,0] = np.random.uniform(lonmin, lonmax)
+            em_data [i,1] = np.random.uniform(latmin, latmax)
         data = request.get_json()
         trucks = data ['trucks']
         interval_time = data ['interval_time']
         interval_count = data ['interval_count']
         virtual = trucks ['virtual']
         assignments = dummy_data (trucks, interval_time, interval_count, em_data)
-        '''
-        for i in range (len(trucks)):
-            if (virtual [i] == True):
-        '''       
+
+        data['assignments'] = {
+            'lat': assignments [:,0].tolist(),
+            'long': assignments [:,1].tolist()
+        }
+        return jsonify(data)
         
 
 def dummy_data (trucks, interval_time, interval_count, em_data):
-    lat = trucks ['location']['lat']
-    long = trucks ['location']['long']
-    virtual = trucks ['virtual']
-
-    data = np.hstack((lat, long))
-    data = np.hstack((data, virtual))
-    data = [[data[:0,], data[:1,], data[:2,]] for (lat, long, virtual) in data if virutal == True]
+    lat = np.transpose(trucks ['location']['lat'])
+    long = np.transpose(trucks ['location']['long'])
+    virtual = np.transpose(trucks ['virtual'])
+    data = np.zeros((len(lat),3))
+    data[:,0] = lat
+    data[:,1] = long
+    data[:,2] = virtual
+    data = data.tolist()
+    data = [[lat, long, virtual] for (lat, long, virtual) in data if virtual == True]
     data = np.array(data)
 
     kmeans = KMeans(n_clusters = len(data)).fit(data[:,0:2])
     centers = kmeans.cluster_centers_
 
     return centers
-
-
-
-
    
 '''   
 @app.route('/login', methods = ['POST', 'GET'])
