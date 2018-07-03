@@ -147,16 +147,17 @@ def emergencies():
             
         output = {
             'start': Date + datetime.timedelta(0,60*time_interval*j),
-            'interval_length': time_interval
+            'interval_length': time_interval,
+            'emergencies': []
         }
-
-        output ['emergencies'] = {
-            'intensity': loc[:,2].tolist(),
-            'location': {
-                'lat': loc [:,1].tolist(),
-                'long': loc [:,0].tolist()
-                }
-        }
+        for i in range (len(loc)):
+            output ['emergencies'].append({
+                'intensity': loc[i,2],
+                'location': {
+                    'lat': loc [i,1],
+                    'long': loc [i,0]
+                    }
+            })
         total_output.append (output)
     return jsonify(total_output)
 
@@ -169,27 +170,40 @@ def assignments():
             em_data [i,0] = np.random.uniform(lonmin, lonmax)
             em_data [i,1] = np.random.uniform(latmin, latmax)
         data = request.get_json()
-        trucks = data ['trucks']
+        trucks = filter_data(data ['trucks'])
+        start_time = datetime.datetime.fromtimestamp(float(data ['start_time']))
         interval_time = data ['interval_time']
         interval_count = data ['interval_count']
-        virtual = trucks ['virtual']
+        virtual = trucks [:,2]
         assignments = dummy_data (trucks, interval_time, interval_count, em_data)
 
-        data['assignments'] = {
-            'lat': assignments [:,0].tolist(),
-            'long': assignments [:,1].tolist()
+        output = {
+            'date': start_time
+            'intervals': interval_count
         }
+        output ['TruckIntervalSchema']
+        
+        data['assignments'] = []
+        for i in range (len(assignments)):
+            data['assignments'].append({
+                'lat': assignments [i,0],
+                'long': assignments [i,1]
+            })
         return jsonify(data)
         
-
+def filter_data (data):
+    trucks = np.zeros((len(data),3))
+    for i in range (len(data)):
+        trucks [i,0] = data [i]['location']['lat']
+        trucks [i,1] = data [i]['location']['long']
+        trucks [i,2] = data [i]['virtual']
+    return trucks
+    
 def dummy_data (trucks, interval_time, interval_count, em_data):
-    lat = np.transpose(trucks ['location']['lat'])
-    long = np.transpose(trucks ['location']['long'])
-    virtual = np.transpose(trucks ['virtual'])
-    data = np.zeros((len(lat),3))
-    data[:,0] = lat
-    data[:,1] = long
-    data[:,2] = virtual
+    data = np.zeros((len(trucks),3))
+    data[:,0] = trucks [:,0]
+    data[:,1] = trucks [:,1]
+    data[:,2] = trucks [:,2]
     data = data.tolist()
     data = [[lat, long, virtual] for (lat, long, virtual) in data if virtual == True]
     data = np.array(data)
