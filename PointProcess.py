@@ -7,6 +7,9 @@ import datetime as datetime
 import warnings
 from numpy import unravel_index
 from numpy import array
+import time
+import pylab as pl
+from IPython import display
 
 class PointProcessTrain:
     #training_points is a dataframe with labels: DATE_TIME (datetime format), XCOORD, YCOORD
@@ -15,7 +18,7 @@ class PointProcessTrain:
     #time_step selects multiplier for dt
     def __init__ (self, training_points, xgridsize = 100, ygridsize = 100, 
         xmin = -86.4619147125, xmax =  -85.60543100000002, ymin = 39.587905, ymax = 40.0099, 
-        w = [.5, .1, .05], time_scale_label = 'days', pred_interval_label = '15minutes', update_model_params_with_periodic_trends_included = False, 
+        w = [.5, .1, .05], time_scale_label = 'days', pred_interval_label = '15minutes', update_with_trends = False, 
         save_loc = 'Trained_Params.npz'):
         
         self._data = training_points 
@@ -49,7 +52,7 @@ class PointProcessTrain:
         self._hour_subdivision = self._hour_vector_subdivision_lookup[pred_interval_label]
         self._hour = np.ones(24*self._hour_subdivision)*1/(24*self._hour_subdivision)
 
-        self._update_with_trends = update_model_params_with_periodic_trends_included
+        self._update_with_trends = update_with_trends
 
     def coord_to_grid(self, xcoord, ycoord):
         if xcoord < self._xmin:
@@ -280,7 +283,7 @@ class PointProcessRun(PointProcessTrain):
                 pred_Lam[x][y] = self.get_intensity(self._mu[-1][x][y], sum(decayed_F_xy), self._hour[future_hour], self._day[future_day], time_weighted = True)
         return pred_Lam
 
-    def get_future_events(self, start_time, num_periods):
+    def get_future_events(self, start_time, num_periods, reshape = False):
         # calls calculate_future_intensity to find intensity matrix @ each time interval. Returns matrix format, times array and format of [xcoord, ycoord, intensity]
         times = []
         time_increment = self.get_time_increment()         # time increment is dependent on how the hour vector is subdivided
@@ -292,15 +295,18 @@ class PointProcessRun(PointProcessTrain):
             intensity = self.calculate_future_intensity(future_time)   
             intensity_predictions[i] = intensity
 
-        intensity_predictions_reshaped = np.zeros([num_periods, self._xsize*self._ysize, 3])
-        for i in range(0, num_periods):
-            intensity_predictions_reshaped[i] = self.reshape_lam(intensity_predictions[i])
+        if reshape:
+            intensity_predictions_reshaped = np.zeros([num_periods, self._xsize*self._ysize, 3])
+            for i in range(0, num_periods):
+                intensity_predictions_reshaped[i] = self.reshape_lam(intensity_predictions[i])
+            intensity_predictions = np.copy(intensity_predictions_reshaped)
 
-        return intensity_predictions, array(times), intensity_predictions_reshaped
+        return intensity_predictions, array(times)
 
     def get_time_increment(self):
         return (1 / self._hour_subdivision)/self._time_scaling_lookup['hours'] 
-    def test_projection(self, test_points, num_hotspots = 10):
+
+    def test_projection(self, test_points, num_hotspots = 10, plot = False):
         # test points is a data frame with labels DATE_TIME (datetime format), XCOORD, YCOORD
         time_period = (test_points.DATE_TIME[len(test_points)-1] - test_points.DATE_TIME[0]).total_seconds()
 
@@ -311,7 +317,7 @@ class PointProcessRun(PointProcessTrain):
 
         print("\nPredicting over time of " + str(time_period*self._time_scale) + " " + str(self._time_scale_label) + ". Generating " + str(num_periods) + " intensity prediction(s)")
 
-        intensity_predictions, time_increments, intensity_predictions_reshaped = self.get_future_events(test_points.DATE_TIME[0], num_periods)
+        intensity_predictions, time_increments = self.get_future_events(test_points.DATE_TIME[0], num_periods)
 
         # sum to get prediction over total time of test_points
         pred_num_events = sum(intensity_predictions[:,:])
@@ -359,12 +365,42 @@ class PointProcessRun(PointProcessTrain):
                 y = actual_locs[i][1]
                 print("Grid: " + str(actual_locs[i]) +", Model: "+ str(pred_num_events[x][y]) + ", Real: " + str(tot_events[x][y]))
 
-        return intensity_predictions, time_increments, intensity_predictions_reshaped
+        if plot:
+            plt.figure(figsize=(20,10))
+            displays = 50
+            interval = ceil(num_periods/50)
+            for n in range(0, displays): 
+                i = n*interval
+                if i < num_periods:
+                    plt.title('Events in window surrounding time: '+time_increments[i].strftime('%Y-%m-%d %H:%M:%S'))
+                    plt.imshow(intensity_predictions[i], cmap = 'hot', interpolation = 'nearest')
+                    display.clear_output(wait=True)
+                    display.display(pl.gcf())
+                    time.sleep(.0005)
+                elif i >= num_periods:
+                    break 
+
+        return intensity_predictions, time_increments
 
     def locs_for_wasserstein(self, num_projections = 16):
 
-        predictions, times, reshaped_predictions = self.get_future_events(self._LastTime, num_projections)
-        return reshaped_predictions
+        predictions, times = self.get_future_events(self._LastTime, num_projections)
+
+        sum_predictions = sum(predictions[:,:])     # use matrix form for summation.
+        pred_val_lst = sum_predictions.reshape(self._xsize*self._ysize//1).tolist()
+        mode = max(set(pred_val_lst), key = pred_val_lst.count)
+
+        reshaped_sum = self.reshape_lam(sum_predictions) 
+
+        condensed = np.empty((0,0,0))
+
+        for i in range(0, len(reshaped_sum)):
+            if reshaped_sum[i][2] != mode and reshaped_sum[i][2] > 0:
+                condensed = np.append(condensed, reshaped_sum[i])
+        # reshape to [xcoord, ycoord, lam]
+        condensed = condensed.reshape((len(condensed)//3,3))
+
+        return condensed
 
     def reshape_lam(self, lam):
         # reshapes matrix of intensities into list of: xcord, ycord, intensity
@@ -379,4 +415,3 @@ class PointProcessRun(PointProcessTrain):
         return x_y_lam
 
 
-        
