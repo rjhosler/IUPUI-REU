@@ -6,6 +6,7 @@ from math import *
 import datetime as datetime
 import warnings
 from numpy import unravel_index
+from numpy import array
 
 class PointProcessTrain:
     #training_points is a dataframe with labels: DATE_TIME (datetime format), XCOORD, YCOORD
@@ -94,7 +95,7 @@ class PointProcessTrain:
         dt_hour = .000005
         for i in range(0, 24):
             hour_prob[i] = (1-dt_hour)*hour_prob[i]
-        hour_prob[curr_hour] += dt_hour 
+        hour_prob[curr_hour] += dt_hour
 
         # global update of all grids: decay _F and get intensity
         for x in range(0, self._xsize):
@@ -108,7 +109,7 @@ class PointProcessTrain:
         g_time_delta = (event_time - Gtimes.at[gx,gy]).total_seconds()*self._time_scale
         Gtimes.at[gx,gy] = event_time
 
-        Lam_g = self.get_intensity(mu[gx][gy], sum(F[gx][gy]), hour_prob[curr_hour], day_prob[curr_day], time_weighted = True)
+        Lam_g = self.get_intensity(mu[gx][gy], sum(F[gx][gy]), hour_prob[curr_hour], day_prob[curr_day], time_weighted = False)
         if Lam_g == 0:
             Lam_g = 1e-70
         mu[gx][gy] = mu[gx][gy] + dt * (mu[gx][gy]/Lam_g - mu[gx][gy] * g_time_delta)
@@ -121,6 +122,7 @@ class PointProcessTrain:
     def get_intensity(self, mu_xy, sum_F_xy, hour_prob, day_prob, time_weighted):
         # get intensity. time_weighted = boolean 
         if time_weighted:
+            day_prob = day_prob * 7
             Lam_xy = (mu_xy + sum_F_xy)*hour_prob*day_prob
         elif not time_weighted:
             Lam_xy = (mu_xy + sum_F_xy)
@@ -250,7 +252,8 @@ class PointProcessRun(PointProcessTrain):
         self._ymin = float(trained_params['grid_info'][4])
         self._ymax = float(trained_params['grid_info'][5])
 
-    def future_intensity(self, future_time):
+    def calculate_future_intensity(self, future_time):  
+        # calls get_intensity to get each indivicual value of Lamba
 
         time_delta = (future_time - self._LastTime).total_seconds()*self._time_scale
 
@@ -267,20 +270,31 @@ class PointProcessRun(PointProcessTrain):
                 pred_Lam[x][y] = self.get_intensity(self._mu[-1][x][y], sum(decayed_F_xy), self._hour[future_hour], self._day[future_day], time_weighted = True)
         return pred_Lam
 
+    def get_future_intensities(self, time_increment, num_periods, start_time):
+        # calls calculate_future_intensity to find intensity matrix @ each time interval
+        time_increments = []
+        intensity_predictions = np.zeros([num_periods, self._xsize, self._ysize])
+
+        for i in range(0, num_periods):
+            future_time = start_time + datetime.timedelta(seconds = time_increment*i)
+            time_increments.append(future_time)
+            intensity = self.calculate_future_intensity(future_time)   
+            intensity_predictions[i] = intensity
+
+        #save out time_increments as numpy array instead of list
+        return intensity_predictions, array(time_increments)
+
     def test_projection(self, test_points, num_hotspots = 10):
         # test points is a data frame with labels DATE_TIME (datetime format), XCOORD, YCOORD
         time_period = (test_points.DATE_TIME[len(test_points)-1] - test_points.DATE_TIME[0]).total_seconds()
 
         # get everything in seconds to find number of periods to model
-        time_increment = (1 / self._hour_subdivision)/self._time_scaling_lookup['hours']           # convert time increment to seconds
+        time_increment = (1 / self._hour_subdivision)/self._time_scaling_lookup['hours']            # time increment is dependent on how the hour vector is subdivided
         num_periods = ceil(time_period/time_increment)                                              # number of predictions to run at time_increment value each
+
         print("\nPredicting over time of " + str(time_period*self._time_scale) + " " + str(self._time_scale_label) + ". Generating " + str(num_periods) + " intensity prediction(s)")
 
-        intensity_predictions = np.zeros([num_periods, self._xsize, self._ysize])
-        for i in range(0, num_periods):
-            future_time = test_points.DATE_TIME[0] + datetime.timedelta(seconds = time_increment*i)
-            intensity = self.future_intensity(future_time)   
-            intensity_predictions[i] = intensity
+        intensity_predictions, time_increments = self.get_future_intensities(time_increment, num_periods, test_points.DATE_TIME[0])
 
         # sum to get prediction over total time of test_points
         pred_num_events = sum(intensity_predictions[:,:])
@@ -328,15 +342,23 @@ class PointProcessRun(PointProcessTrain):
                 y = actual_locs[i][1]
                 print("Grid: " + str(actual_locs[i]) +", Model: "+ str(pred_num_events[x][y]) + ", Real: " + str(tot_events[x][y]))
 
-        return intensity_predictions
+        intensity_predictions_reshaped = np.zeros([num_periods, self._xsize*self._ysize, 3])
+        for i in range(0, num_periods):
+            intensity_predictions_reshaped[i] = self.reshape_lam(intensity_predictions[i])
 
-    def test_locs_for_wasserstein(self, num_points = 100):
+        return intensity_predictions_reshaped, time_increments
+
+    def test_locs_for_wasserstein(self, num_projections = 100):
+
+        time_increment = (1 / self._hour_subdivision)/self._time_scaling_lookup['hours']            # time increment is dependent on how the hour vector is subdivided
+        intensity_predictions = self.get_future_intensities(time_increment, num_projections, self._LastTime)
+        pred_num_events = sum(intensity_predictions[:,:])
+        reshaped_pred = self.reshape_lam(pred_num_events)
+        return reshaped_pred
+
+    def reshape_lam(self, lam):
+        # reshapes matrix of intensities into list of: xcord, ycord, intensity
         x_y_lam = np.empty((0,0,0))
-
-        start = self._data_length - num_points
-        
-        lam = sum(self._Lam[start:,:])/num_points
-
         for x in range(0, self._xsize):
             for y in range(0, self._ysize):
                 xcoord, ycoord = self.grid_to_coord(x, y)
