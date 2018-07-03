@@ -23,6 +23,8 @@ import wasserstein
 import PointProcess
 from wasserstein import Cluster
 from PointProcess import PointProcessTrain
+import json
+from bson import json_util
 
 from flask import Flask, redirect, url_for, request, jsonify     
 app = Flask(__name__)
@@ -57,6 +59,10 @@ def emergencies():
                     }
             })
         total_output.append (output)
+        
+    filePathNameWExt = 'C:/Users/rjhosler/Documents/_REU/emergencies.json'
+    with open(filePathNameWExt, 'w') as fp:
+        json.dump(total_output, fp, default=json_util.default)
     return jsonify(total_output)
 
 @app.route('/assignments', methods = ['POST'])
@@ -106,6 +112,9 @@ def assignments():
                 curr_object ['assigned_location'] = curr_object ['location']
             output ['TruckSchema'].append (curr_object)
             
+        filePathNameWExt = 'C:/Users/rjhosler/Documents/_REU/assignments.json'
+        with open(filePathNameWExt, 'w') as fp:
+            json.dump(output, fp, default=json_util.default)
         return jsonify(output)
         
 def filter_data (data):
@@ -145,9 +154,17 @@ def wasserstein_cluster (trucks, interval_time, interval_count, em_data):
 
     cluster = Cluster (grid_loc, len(data))
     cluster.set_centers (data[:,0:2], len(data))
-    lam = cluster.learn_lam(10, False)
+    lam = cluster.learn_lam(5, False)
     centers = cluster.get_centers()
-    data = cluster.get_data()    
+    data = cluster.get_data()
+
+    '''
+    plt.title ('Wasserstein')
+    plt.scatter(data[:,0], data[:,1])
+    plt.scatter(centers[:,0], centers[:,1], c = 'red', s = 100, alpha = 0.5)
+    plt.show()
+    '''
+    
     return centers
 
 def shrink_data (em_data, interval_count, trucks):
