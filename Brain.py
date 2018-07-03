@@ -166,9 +166,13 @@ def assignments():
     if (request.method == 'POST'):
         lonmin = -86.4619147125; lonmax =  -85.60543100000002; latmin = 39.587905; latmax = 40.0099;
         em_data = np.zeros((20,2))
+
+        
         for i in range (len(em_data)):
             em_data [i,0] = np.random.uniform(lonmin, lonmax)
             em_data [i,1] = np.random.uniform(latmin, latmax)
+
+            
         data = request.get_json()
         trucks = filter_data(data ['trucks'])
         start_time = datetime.datetime.fromtimestamp(float(data ['start_time']))
@@ -178,25 +182,44 @@ def assignments():
         assignments = dummy_data (trucks, interval_time, interval_count, em_data)
 
         output = {
-            'date': start_time
+            'date': start_time,
             'intervals': interval_count
         }
-        output ['TruckIntervalSchema']
+        output ['TruckIntervalSchema'] = {
+            'date': start_time,
+            'trucks': len(trucks)
+        }
+        output ['TruckSchema'] = []
         
-        data['assignments'] = []
-        for i in range (len(assignments)):
-            data['assignments'].append({
-                'lat': assignments [i,0],
-                'long': assignments [i,1]
-            })
-        return jsonify(data)
+        assign_iter = 0
+        for i in range (len(trucks)):
+            curr_object = {
+                'id': trucks [i,3],
+                'location': {
+                    'lat': trucks [i,0],
+                    'long': trucks [i,1]
+                }
+            }
+            if (trucks [i,2] == True):
+                curr_object ['assigned_location'] = {
+                    'lat': assignments [assign_iter,0],
+                    'long': assignments [assign_iter,1]
+                }
+                assign_iter += 1
+            else:
+                curr_object ['assigned_location'] = curr_object ['location']
+            output ['TruckSchema'].append (curr_object)
+            
+        return jsonify(output)
         
 def filter_data (data):
-    trucks = np.zeros((len(data),3))
+    trucks = np.zeros((len(data),5))
     for i in range (len(data)):
         trucks [i,0] = data [i]['location']['lat']
         trucks [i,1] = data [i]['location']['long']
         trucks [i,2] = data [i]['virtual']
+        trucks [i,3] = data [i]['id']
+        trucks [i,4] = data [i]['type']
     return trucks
     
 def dummy_data (trucks, interval_time, interval_count, em_data):
