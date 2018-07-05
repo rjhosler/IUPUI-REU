@@ -43,7 +43,7 @@ class PointProcessTrain:
         self._save_out = save_loc
 
         self._time_scale_label = time_scale_label
-        self._time_scaling_lookup = {'days': 1.15741e-5, 'hours': 0.0002777784, '15minutes': 0.001111111, 'minutes': 0.016666704, 'seconds': 1}
+        self._time_scaling_lookup = {'days': 1.15741e-5} # convert delta seconds to delta days
         self._time_scale = self._time_scaling_lookup[self._time_scale_label]
 
         self._day = np.ones(7)*1/7
