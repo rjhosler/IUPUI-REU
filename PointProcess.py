@@ -18,7 +18,7 @@ class PointProcessTrain:
     #time_step selects multiplier for dt
     def __init__ (self, training_points, xgridsize = 100, ygridsize = 100, 
         xmin = -86.4619147125, xmax =  -85.60543100000002, ymin = 39.587905, ymax = 40.0099, 
-        w = [.5, .1, .05], time_scale_label = 'days', pred_interval_label = '15minutes', update_with_trends = False, 
+        w = [.5, .1, .05], pred_interval_label = '15minutes', update_with_trends = False, 
         save_loc = 'Trained_Params.npz'):
         
         self._data = training_points 
@@ -42,8 +42,8 @@ class PointProcessTrain:
 
         self._save_out = save_loc
 
-        self._time_scale_label = time_scale_label
-        self._time_scaling_lookup = {'days': 1.15741e-5} # convert delta seconds to delta days
+        self._time_scale_label = 'days'
+        self._time_scaling_lookup = {'days': 1.15741e-5 'hours': 0.0002777784, '15minutes': 0.001111111, 'minutes': 0.016666704, 'seconds': 1}  # for converting from seconds to days, hours, etc. 
         self._time_scale = self._time_scaling_lookup[self._time_scale_label]
 
         self._day = np.ones(7)*1/7
