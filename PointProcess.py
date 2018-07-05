@@ -149,6 +149,10 @@ class PointProcessTrain:
                 self._data.DATE_TIME[i], self._data.DATE_TIME[i-1], self._data.XCOORD[i], self._data.YCOORD[i],
                 self._day, self._hour,
                 self._Lam[i], self._F[i], self._mu[i], self._theta[i], self._Gtimes)
+        
+        self.save_params()
+
+    def save_params(self):
 
         np.savez(self._save_out, Lam = self._Lam, theta = self._theta, w = self._w, 
             F = self._F, mu = self._mu, day_prob = self._day, hour_prob = self._hour,
@@ -301,7 +305,7 @@ class PointProcessRun(PointProcessTrain):
                 intensity_predictions_reshaped[i] = self.reshape_lam(intensity_predictions[i])
             intensity_predictions = np.copy(intensity_predictions_reshaped)
 
-        return intensity_predictions, array(times)
+        return intensity_predictions, array(times), time_increment
 
     def get_time_increment(self):
         return (1 / self._hour_subdivision)/self._time_scaling_lookup['hours'] 
@@ -317,7 +321,7 @@ class PointProcessRun(PointProcessTrain):
 
         print("\nPredicting over time of " + str(time_period*self._time_scale) + " " + str(self._time_scale_label) + ". Generating " + str(num_periods) + " intensity prediction(s)")
 
-        intensity_predictions, time_increments = self.get_future_events(test_points.DATE_TIME[0], num_periods)
+        intensity_predictions, time_increments, time_increment_unit = self.get_future_events(test_points.DATE_TIME[0], num_periods)
 
         # sum to get prediction over total time of test_points
         pred_num_events = sum(intensity_predictions[:,:])
@@ -382,9 +386,9 @@ class PointProcessRun(PointProcessTrain):
 
         return intensity_predictions, time_increments
 
-    def locs_for_wasserstein(self, num_projections = 16):
+    def locs_for_wasserstein(self, start_time, num_projections = 16):
 
-        predictions, times = self.get_future_events(self._LastTime, num_projections)
+        predictions, times, time_increment_unit = self.get_future_events(start_time, num_projections)
 
         sum_predictions = sum(predictions[:,:])     # use matrix form for summation.
         pred_val_lst = sum_predictions.reshape(self._xsize*self._ysize//1).tolist()
