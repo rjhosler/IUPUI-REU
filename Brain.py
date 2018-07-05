@@ -89,7 +89,7 @@ def assignments():
         virtual = trucks [:,2]
         
         #assignments = dummy_data (trucks, interval_time, interval_count, em_data)
-        assignments = wasserstein_cluster (trucks, interval_time, interval_count, em_data)
+        assignments = wasserstein_cluster (trucks, interval_time, interval_count, start_time, em_data)
 
         output = {
             'date': start_time,
@@ -120,7 +120,7 @@ def assignments():
                 curr_object ['assigned_location'] = curr_object ['location']
             output ['TruckSchema'].append (curr_object)
             
-        filePathNameWExt = 'assignments.json'
+        filePathNameWExt = 'C:/Users/rjhosler/Documents/_REU/assignments.json'
         with open(filePathNameWExt, 'w') as fp:
             json.dump(output, fp, default=json_util.default)
         return jsonify(output)
@@ -156,9 +156,10 @@ def dummy_data (trucks, interval_time, interval_count, em_data):
     3.) Initialize centers with the locations of the true trucks
     4.) Cluster the data and return the centers
 '''
-def wasserstein_cluster (trucks, interval_time, interval_count, em_data):
-    grid_loc, data = shrink_data (em_data, interval_count, trucks)
-    data = np.zeros((len(trucks),3))
+def wasserstein_cluster (trucks, interval_time, interval_count, start_time, em_data):
+    data = shrink_data (em_data, interval_count, trucks)
+    #how cluster data will be handles in the future
+    grid_loc = PointProcess.locs_for_wasserstein (start_time, interval_count)
 
     cluster = Cluster (grid_loc, len(data))
     cluster.set_centers (data[:,0:2], len(data))
@@ -166,17 +167,40 @@ def wasserstein_cluster (trucks, interval_time, interval_count, em_data):
     centers = cluster.get_centers()
     data = cluster.get_data()
 
-    '''
     plt.title ('Wasserstein')
     plt.scatter(data[:,0], data[:,1])
     plt.scatter(centers[:,0], centers[:,1], c = 'red', s = 100, alpha = 0.5)
     plt.show()
-    '''
     
     return centers
 
+def shrink_data (em_data, interval_count, trucks):
+    data = np.zeros((len(trucks),3))
+    data[:,0] = trucks [:,0]
+    data[:,1] = trucks [:,1]
+    data[:,2] = trucks [:,2]
+    data = data.tolist()
+    data = [[lat, long, virtual] for (lat, long, virtual) in data if virtual == True]
+    data = np.array(data)
+    '''
+    em_shrink = sum (em_data [0:interval_count,:])
+    em_shrink [:,0:2] = em_shrink [:,0:2] / interval_count
+    grid_loc = np.empty((0,0))
+    lst = em_shrink[:,2].tolist()
+    scom = max(set(lst), key=lst.count)
+    
+    for i in range (len(em_shrink)):
+        if (em_shrink [i,2] != scom and em_shrink [i,2] > 0.0):
+            loc = em_shrink[i]
+            grid_loc = np.append(grid_loc, loc)
+    grid_loc = grid_loc.reshape ((len(grid_loc) // 3, 3))
+    temp = np.copy(grid_loc [:,0])
+    grid_loc [:,0] = grid_loc [:,1]
+    grid_loc [:,1] = temp
+    
+    return grid_loc, data
+    '''
+    return data
+
 if __name__ == '__main__':
-
-    app.run()
-
-   
+   app.run()
