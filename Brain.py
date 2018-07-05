@@ -23,46 +23,54 @@ import wasserstein
 import PointProcess
 from wasserstein import Cluster
 from PointProcess import PointProcessTrain
+from PointProcess import PointProcessRun
 import json
 from bson import json_util
 
 from flask import Flask, redirect, url_for, request, jsonify     
 app = Flask(__name__)
 
+PointProcess = PointProcessRun('TrainedParamsForBrain.npz')
+
 @app.route('/emergencies')
 def emergencies():
     start_time = request.args.get('start_time')
     interval_count = request.args.get('interval_count')
+    interval_count = int(interval_count)
     if (request.args.get('time_interval')):
         time_interval = request.args.get('time_interval')
         time_interval = int(time_interval)
     else:
         time_interval = 15
  
-    Date =  datetime.datetime.fromtimestamp(float(start_time))
+    start_time =  datetime.datetime.fromtimestamp(float(start_time))
     total_output = []
-    sample = np.load ('SampleOutputs.npz')
-    loc = sample['intensities']
-           
+
+    predictions, times, increment = PointProcess.get_future_events(start_time, interval_count, reshape = True)
+
+    predictions = predictions.tolist()
+
+
     for j in range (int(interval_count)):            
         output = {
-            'start': Date + datetime.timedelta(0,60*time_interval*j),
-            'interval_length': time_interval,
+            'start': times[j],
+            'interval_length': increment,
             'emergencies': []
         }
-        for i in range (len(loc[0])):
+        for i in range (len(predictions[0])):
             output ['emergencies'].append({
-                'intensity': loc [j][i,2],
+                'intensity': predictions[j][i][2],
                 'location': {
-                    'lat': loc [j][i,0],
-                    'long': loc [j][i,1]
+                    'lat': predictions[j][i][0],
+                    'long': predictions[j][i][1]
                     }
             })
         total_output.append (output)
         
-    filePathNameWExt = 'C:/Users/rjhosler/Documents/_REU/emergencies.json'
+    filePathNameWExt = 'emergencies.json'
     with open(filePathNameWExt, 'w') as fp:
         json.dump(total_output, fp, default=json_util.default)
+
     return jsonify(total_output)
 
 @app.route('/assignments', methods = ['POST'])
@@ -112,7 +120,7 @@ def assignments():
                 curr_object ['assigned_location'] = curr_object ['location']
             output ['TruckSchema'].append (curr_object)
             
-        filePathNameWExt = 'C:/Users/rjhosler/Documents/_REU/assignments.json'
+        filePathNameWExt = 'assignments.json'
         with open(filePathNameWExt, 'w') as fp:
             json.dump(output, fp, default=json_util.default)
         return jsonify(output)
@@ -167,31 +175,8 @@ def wasserstein_cluster (trucks, interval_time, interval_count, em_data):
     
     return centers
 
-def shrink_data (em_data, interval_count, trucks):
-    data = np.zeros((len(trucks),3))
-    data[:,0] = trucks [:,0]
-    data[:,1] = trucks [:,1]
-    data[:,2] = trucks [:,2]
-    data = data.tolist()
-    data = [[lat, long, virtual] for (lat, long, virtual) in data if virtual == True]
-    data = np.array(data)
-
-    em_shrink = sum (em_data [0:interval_count,:])
-    em_shrink [:,0:2] = em_shrink [:,0:2] / interval_count
-    grid_loc = np.empty((0,0))
-    lst = em_shrink[:,2].tolist()
-    scom = max(set(lst), key=lst.count)
-    
-    for i in range (len(em_shrink)):
-        if (em_shrink [i,2] != scom and em_shrink [i,2] > 0.0):
-            loc = em_shrink[i]
-            grid_loc = np.append(grid_loc, loc)
-    grid_loc = grid_loc.reshape ((len(grid_loc) // 3, 3))
-    temp = np.copy(grid_loc [:,0])
-    grid_loc [:,0] = grid_loc [:,1]
-    grid_loc [:,1] = temp
-
-    return grid_loc, data
-
 if __name__ == '__main__':
-   app.run()
+
+    app.run()
+
+   
