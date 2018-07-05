@@ -94,11 +94,11 @@ class PointProcessTrain:
 
         # update periodic trends
         dt_day = 0.0005
-        for i in range(0, 7):
+        for i in range(0, len(self._day)):
             day_prob[i] = (1-dt_day)*day_prob[i]
         day_prob[curr_day] += dt_day
         dt_hour = .000005
-        for i in range(0, 24):
+        for i in range(0, len(self._hour)):
             hour_prob[i] = (1-dt_hour)*hour_prob[i]
         hour_prob[curr_hour] += dt_hour
 
@@ -133,9 +133,11 @@ class PointProcessTrain:
         elif time_weighted and self._update_with_trends:
             # If model parameters are calculated with trends, this is the way that all values of lambda are calculated. No need to do any scaling.
             Lam_xy = (mu_xy + sum_F_xy)*hour_prob*day_prob
-        elif not time_weighted:
+        elif not time_weighted and not self._update_with_trends:
             # This is for calculating model parameters without factoring trends in. 
             Lam_xy = (mu_xy + sum_F_xy)
+        else:
+            raise("Error with weighting & dimensional anaysis")
         return Lam_xy
 
     def train(self):
@@ -429,9 +431,9 @@ class PointProcessRun(PointProcessTrain):
                 elif i >= num_periods:
                     break 
 
-        return intensity_predictions, time_increments
+        return intensity_predictions, time_increments, pred_num_events, pred_locs, tot_events, actual_locs
 
-    def locs_for_wasserstein(self, start_time, num_projections = 16):
+    def locs_for_wasserstein(self, start_time, num_projections = 16, top_percent = 96):
 
         predictions, times, time_increment_unit = self.get_future_events(start_time, num_projections)
 
@@ -439,12 +441,14 @@ class PointProcessRun(PointProcessTrain):
         pred_val_lst = sum_predictions.reshape(self._xsize*self._ysize//1).tolist()
         mode = max(set(pred_val_lst), key = pred_val_lst.count)
 
+        threshold = np.percentile(pred_val_lst, top_percent)
+
         reshaped_sum = self.reshape_lam(sum_predictions) 
 
         condensed = np.empty((0,0,0))
 
         for i in range(0, len(reshaped_sum)):
-            if reshaped_sum[i][2] != mode and reshaped_sum[i][2] > 0:
+            if reshaped_sum[i][2] != mode and reshaped_sum[i][2] > threshold:
                 condensed = np.append(condensed, reshaped_sum[i])
         # reshape to [xcoord, ycoord, lam]
         condensed = condensed.reshape((len(condensed)//3,3))
