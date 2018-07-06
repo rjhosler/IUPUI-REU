@@ -17,7 +17,7 @@ class PointProcessTrain:
     #omega (w) is initialized to generic points
     #time_step selects multiplier for dt
     def __init__ (self, training_points, xgridsize = 100, ygridsize = 100, 
-        xmin = -86.4619147125, xmax =  -85.60543100000002, ymin = 39.587905, ymax = 40.0099, 
+        xmin = -86.3283, xmax =  -85.8942, ymin = 39.6277, ymax = 39.9277, 
         w = [.5, .1, .05], pred_interval_label = '15minutes', update_with_trends = False, 
         save_loc = 'Trained_Params.npz'):
         
@@ -264,7 +264,7 @@ class PointProcessRun(PointProcessTrain):
         self._day = trained_params['day_prob']
         self._hour = trained_params['hour_prob']
         self._Gtimes = pd.DataFrame(trained_params['grid_times'])
-        self._LastTime = trained_params['last_time']
+        self._LastTime = trained_params['last_time'].tolist()
         self._K = len(self._w)
 
         self._save_out = str(trained_params['save_loc'])
@@ -291,6 +291,21 @@ class PointProcessRun(PointProcessTrain):
         new_points = len(update_data)
         update_data.DATE_TIME = pd.to_datetime(update_data.DATE_TIME, format='%Y-%m-%d %H:%M:%S')
         update_data = update_data.sort_values(by = 'DATE_TIME')
+        update_data.reset_index(drop = True, inplace = True)
+
+        indx = None
+        for i in range(0, new_points):
+            if update_data.DATE_TIME[i] > self._LastTime:
+                indx = i
+                break
+
+        if not indx:
+            msg = 'No inputted events occurred at a later date than events previously used for training'
+            return msg
+
+        update_data = update_data[indx:]
+        update_data.reset_index(drop = True, inplace = True)
+        new_points = len(update_data)
 
         # Lam, F, mu and theta all have "memory". We work with the final index of each, but the last ~10 or so are saved for debugging purposes
         new_theta = np.zeros([new_points, self._K])
@@ -316,6 +331,9 @@ class PointProcessRun(PointProcessTrain):
 
         self.save_params()
 
+        msg = 'Parameters updated: ' + str(new_points) + ' used for update ranging from: '+ update_data.DATE_TIME[0].strftime('%Y-%m-%d %H:%M:%S') + ' to ' + update_data.DATE_TIME[new_points-1].strftime('%Y-%m-%d %H:%M:%S')+'.'
+        return msg
+
     def calculate_future_intensity(self, future_time):  
         # calls get_intensity to get each indivicual value of Lamba
 
@@ -334,8 +352,9 @@ class PointProcessRun(PointProcessTrain):
                 pred_Lam[x][y] = self.get_intensity(self._mu[-1][x][y], sum(decayed_F_xy), self._hour[future_hour], self._day[future_day], time_weighted = True)
         return pred_Lam
 
-    def get_future_events(self, start_time, num_periods, reshape = False):
+    def get_future_events(self, start_time, num_periods, reshape = False, filter = 0):
         # calls calculate_future_intensity to find intensity matrix @ each time interval. Returns matrix format, times array and format of [xcoord, ycoord, intensity]
+        # filter is lowest percentile to keep in the data set
         times = []
         time_increment = self.get_time_increment()         # time increment is dependent on how the hour vector is subdivided
         intensity_predictions = np.zeros([num_periods, self._xsize, self._ysize])
@@ -420,7 +439,7 @@ class PointProcessRun(PointProcessTrain):
             plt.figure(figsize=(20,10))
             displays = 50
             interval = ceil(num_periods/50)
-            for n in range(0, displays): 
+            for n in range(0, displays):  
                 i = n*interval
                 if i < num_periods:
                     plt.title('Events in window surrounding time: '+time_increments[i].strftime('%Y-%m-%d %H:%M:%S'))
