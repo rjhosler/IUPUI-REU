@@ -75,8 +75,8 @@ def emergencies():
 
 @app.route('/ProcessUpdate/<name>')
 def ProcessUpdate(name):
-    PointProcess.update_from_new_inputs(name)
-    return 'Process Parameters Updated'
+    msg = PointProcess.update_from_new_inputs(name)
+    return msg
 
 @app.route('/login', methods = ['POST', 'GET'])
 def login():
