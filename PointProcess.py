@@ -299,7 +299,7 @@ class PointProcessRun(PointProcessTrain):
                 indx = i
                 break
 
-        if not indx:
+        if indx is None:
             msg = 'No inputted events occurred at a later date than events previously used for training'
             return msg
 
@@ -324,11 +324,6 @@ class PointProcessRun(PointProcessTrain):
         self._mu = np.concatenate((self._mu, new_mu), axis=0)
         self._theta = np.concatenate((self._theta, new_theta), axis=0)
 
-        self._Lam = self._Lam[1:,:]
-        self._F = self._F[1:,:]
-        self._mu = self._mu[1:,:]
-        self._theta = self._theta[1:,:]
-
         self.save_params()
 
         msg = 'Parameters updated: ' + str(new_points) + ' used for update ranging from: '+ update_data.DATE_TIME[0].strftime('%Y-%m-%d %H:%M:%S') + ' to ' + update_data.DATE_TIME[new_points-1].strftime('%Y-%m-%d %H:%M:%S')+'.'
@@ -352,31 +347,49 @@ class PointProcessRun(PointProcessTrain):
                 pred_Lam[x][y] = self.get_intensity(self._mu[-1][x][y], sum(decayed_F_xy), self._hour[future_hour], self._day[future_day], time_weighted = True)
         return pred_Lam
 
-    def get_future_events(self, start_time, num_periods, reshape = False, filter = 0):
-        # calls calculate_future_intensity to find intensity matrix @ each time interval. Returns matrix format, times array and format of [xcoord, ycoord, intensity]
-        # filter is lowest percentile to keep in the data set
+    def get_future_events(self, start_time, num_periods, top_percent):
+        # calls calculate_future_intensity to find intensity matrix @ each ti,me interval. Returns matrix format, times array and format of [xcoord, ycoord, intensity]
+        # top_percent is lowest percentile to keep in the data set
         times = []
         time_increment = self.get_time_increment()         # time increment is dependent on how the hour vector is subdivided
         intensity_predictions = np.zeros([num_periods, self._xsize, self._ysize])
 
+        if top_percent:
+            if top_percent > 100:
+                top_percent = 100
+            if top_percent < 0:
+                top_percent = 0
+
         for i in range(0, num_periods):
             future_time = start_time + datetime.timedelta(seconds = time_increment*i)
             times.append(future_time)
-            intensity = self.calculate_future_intensity(future_time)   
+            intensity = self.calculate_future_intensity(future_time) 
+
+            if top_percent:
+                threshold = np.percentile(intensity, top_percent)
+                intensity = intensity - threshold    # values below threshold become negative
+                neg_indxs = intensity < 0            # find indices of values below 0
+                intensity[neg_indxs] = 0             # set negative values to 0
+
             intensity_predictions[i] = intensity
 
-        if reshape:
-            intensity_predictions_reshaped = np.zeros([num_periods, self._xsize*self._ysize, 3])
-            for i in range(0, num_periods):
-                intensity_predictions_reshaped[i] = self.reshape_lam(intensity_predictions[i])
-            intensity_predictions = np.copy(intensity_predictions_reshaped)
-
         return intensity_predictions, array(times), time_increment
+
+    def get_events_for_api(self, start_time, num_periods, top_percent = 90):
+        # formats future predictions for the api
+        intensity_predictions, times, time_increment = self.get_future_events(start_time, num_periods, top_percent)
+
+        reshaped_intensity_predictions = []
+
+        for i in range(0, len(intensity_predictions)):
+            reshaped_intensity_predictions.append(self.reshape_lam(intensity_predictions[i], list_format = 'list'))
+
+        return reshaped_intensity_predictions, times, time_increment
 
     def get_time_increment(self):
         return (1 / self._hour_subdivision)/self._time_scaling_lookup['hours'] 
 
-    def test_projection(self, test_points, num_hotspots = 10, plot = False):
+    def test_projection(self, test_points, num_hotspots = 10, top_percent = 90):
         # test points is a data frame with labels DATE_TIME (datetime format), XCOORD, YCOORD
         time_period = (test_points.DATE_TIME[len(test_points)-1] - test_points.DATE_TIME[0]).total_seconds()
 
@@ -387,7 +400,7 @@ class PointProcessRun(PointProcessTrain):
 
         print("\nPredicting over time of " + str(time_period*self._time_scale) + " " + str(self._time_scale_label) + ". Generating " + str(num_periods) + " intensity prediction(s)")
 
-        intensity_predictions, time_increments, time_increment_unit = self.get_future_events(test_points.DATE_TIME[0], num_periods)
+        intensity_predictions, time_increments, time_increment_unit = self.get_future_events(test_points.DATE_TIME[0], num_periods, top_percent)
 
         # sum to get prediction over total time of test_points
         pred_num_events = sum(intensity_predictions[:,:])
@@ -435,56 +448,52 @@ class PointProcessRun(PointProcessTrain):
                 y = actual_locs[i][1]
                 print("Grid: " + str(actual_locs[i]) +", Model: "+ str(pred_num_events[x][y]) + ", Real: " + str(tot_events[x][y]))
 
-        if plot:
-            plt.figure(figsize=(20,10))
-            displays = 50
-            interval = ceil(num_periods/50)
-            for n in range(0, displays):  
-                i = n*interval
-                if i < num_periods:
-                    plt.title('Events in window surrounding time: '+time_increments[i].strftime('%Y-%m-%d %H:%M:%S'))
-                    plt.imshow(intensity_predictions[i], cmap = 'hot', interpolation = 'nearest')
-                    display.clear_output(wait=True)
-                    display.display(pl.gcf())
-                    time.sleep(.0005)
-                elif i >= num_periods:
-                    break 
+        pai, n_frac, a_frac = self.predictive_accuracy(pred_num_events, pred_locs, tot_events)
+
+        print("The predictive accuracy index for " + str(num_hotspots) + " hotspots is: " + str(pai) +". \nHit number/Tot number: " + str(n_frac) + ". Hit area/Tot area: " + str(a_frac))
 
         return intensity_predictions, time_increments, pred_num_events, pred_locs, tot_events, actual_locs
 
-    def locs_for_wasserstein(self, start_time, num_projections = 16, top_percent = 96):
+    def predictive_accuracy(self, tot_pred, pred_locs, tot_events):
+        hit_num = 0
+        tot = sum(sum(tot_events))
+        for i in range(0, len(pred_locs)):
+            x = pred_locs[i][0]
+            y = pred_locs[i][1]
+            hit_num = hit_num + tot_events[x][y]
+        print(hit_num)
+        n_frac = hit_num/tot
+        a_frac = len(pred_locs)/(tot_pred.shape[0]*tot_pred.shape[1])
+        
+        pai = n_frac/a_frac
 
-        predictions, times, time_increment_unit = self.get_future_events(start_time, num_projections)
+        return pai, n_frac, a_frac
 
-        sum_predictions = sum(predictions[:,:])     # use matrix form for summation.
-        pred_val_lst = sum_predictions.reshape(self._xsize*self._ysize//1).tolist()
-        mode = max(set(pred_val_lst), key = pred_val_lst.count)
+    def locs_for_wasserstein(self, start_time, num_projections = 16, top_percent = 90):
 
-        threshold = np.percentile(pred_val_lst, top_percent)
+        predictions, times, time_increment_unit = self.get_future_events(start_time, num_projections, top_percent)
+        sum_predictions = sum(predictions[:,:])
+        reshaped_sum = self.reshape_lam(sum_predictions, list_format = 'np') 
+        return reshaped_sum
 
-        reshaped_sum = self.reshape_lam(sum_predictions) 
-
-        condensed = np.empty((0,0,0))
-
-        for i in range(0, len(reshaped_sum)):
-            if reshaped_sum[i][2] != mode and reshaped_sum[i][2] > threshold:
-                condensed = np.append(condensed, reshaped_sum[i])
-        # reshape to [xcoord, ycoord, lam]
-        condensed = condensed.reshape((len(condensed)//3,3))
-
-        return condensed
-
-    def reshape_lam(self, lam):
+    def reshape_lam(self, lam, list_format = 'np'):
         # reshapes matrix of intensities into list of: xcord, ycord, intensity
+        # return numpy format for wasserstein clustering, list format for predictions (because that allows for different lengths)
+        # removes intensity values of 0
+
         x_y_lam = np.empty((0,0,0))
         for x in range(0, self._xsize):
             for y in range(0, self._ysize):
                 xcoord, ycoord = self.grid_to_coord(x, y)
                 # format is latitude, longitude, intensity
-                to_append = ycoord, xcoord, lam[x][y]
-                x_y_lam = np.append(x_y_lam, to_append)
+                if lam[x][y] > 0:
+                    to_append = ycoord, xcoord, lam[x][y]
+                    x_y_lam = np.append(x_y_lam, to_append)
 
         x_y_lam = x_y_lam.reshape ((len(x_y_lam)//3,3))
+
+        if list_format != 'np':
+            x_y_lam = x_y_lam.tolist()
         return x_y_lam
 
 
