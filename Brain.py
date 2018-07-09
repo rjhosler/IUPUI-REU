@@ -46,9 +46,7 @@ def emergencies():
     start_time =  datetime.datetime.fromtimestamp(float(start_time))
     total_output = []
 
-    predictions, times, increment = PointProcess.get_future_events(start_time, interval_count, reshape = True)
-
-    predictions = predictions.tolist()
+    predictions, times, increment = PointProcess.get_events_for_api(start_time, interval_count)
 
 
     for j in range (int(interval_count)):            
