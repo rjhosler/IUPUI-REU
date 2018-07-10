@@ -32,9 +32,9 @@ class PointProcessTrain:
 
         self._w = array(w)
         self._K = len(w)
-        self._mu = np.ones([self._xsize, self._ysize])*0.0000001
+        self._mu = np.ones([self._xsize, self._ysize])*0.02
         self._F = np.ones([self._xsize, self._ysize, self._K])*.1
-        self._Lam = np.ones([self._xsize, self._ysize])*0.000000001
+        self._Lam = np.ones([self._xsize, self._ysize])*0.001
         self._theta = np.ones([self._K])*.1
         self._Gtimes = pd.DataFrame(np.zeros([xgridsize, ygridsize]))
         self._Gtimes[:] = self._data.DATE_TIME[0]
@@ -234,12 +234,12 @@ class PointProcessTrain:
         if num_points > self._lam_memory:
             num_points = self._lam_memory
 
-        start = len(self._Lam_for_hotspots) - num_points
+        start = self._data_length - num_points
         if start < 0:
             start = 0
-        end = len(self._Lam_for_hotspots)-1
+        end = self._data_length -1
 
-        sum_intensity = sum(self._Lam_for_hotspots[start:,:])
+        sum_intensity = sum(self._Lam_for_hotspots[-num_points:,:])
         print("Location and value of largest and smallest sum(Lambda): ")
         print(np.amax(sum_intensity), unravel_index(sum_intensity.argmax(), sum_intensity.shape),
             np.amin(sum_intensity), unravel_index(sum_intensity.argmin(), sum_intensity.shape))
@@ -391,7 +391,7 @@ class PointProcessRun(PointProcessTrain):
     def get_future_events(self, start_time, num_periods, top_percent):
         # calls calculate_future_intensity to find intensity matrix @ each ti,me interval. Returns matrix format, times array and format of [xcoord, ycoord, intensity]
         # top_percent is lowest percentile to keep in the data set
-        times = np.zeros(num_periods)
+        times = []
         time_increment = self.get_time_increment()         # time increment is dependent on how the hour vector is subdivided
         intensity_predictions = np.zeros([num_periods, self._xsize, self._ysize])
 
@@ -403,7 +403,7 @@ class PointProcessRun(PointProcessTrain):
 
         for i in range(0, num_periods):
             future_time = start_time + datetime.timedelta(seconds = time_increment*i)
-            times[i] = future_time
+            times.append(future_time)
             intensity = self.calculate_future_intensity(future_time) 
 
             if top_percent:
@@ -414,7 +414,7 @@ class PointProcessRun(PointProcessTrain):
 
             intensity_predictions[i] = intensity
 
-        return intensity_predictions, times, time_increment
+        return intensity_predictions, array(times), time_increment
 
     def get_events_for_api(self, start_time, num_periods, top_percent = 90):
         # formats future predictions for the api
