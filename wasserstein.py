@@ -113,7 +113,7 @@ class Cluster:
                     size += 1
                     intensity += self._data [j, 2]
             if (isEmpty == False):
-                weight = intensity / sum (self._data [:,2]) #(size / len (self._data) + intensity / sum (self._data [:,2])) / 2
+                weight = intensity / sum (self._data [:,2])
                 avg_dist = np.append (avg_dist, dist_array.mean() * weight)
         return sum(avg_dist)
 
@@ -126,19 +126,6 @@ class Cluster:
             if (point.size != 0):
                 self._centers [i] = point.mean(axis = 0)
         self.cluster_assignment()
-                    
-    #method to return statistics on cluster size
-    #NOTE: this method only works when cluster IDs have been assigned
-    #return cluster sizes and cluster size variance
-    def cluster_size_stats (self):
-        avg_cluster = np.empty ([0])
-        for i in range (len(self._centers)):
-            clusterSize = 0
-            for j in range (len(self._data)):
-                if (self._data [j, 3] == i):
-                    clusterSize += 1
-            avg_cluster = np.append (avg_cluster, clusterSize)
-        return avg_cluster, avg_cluster.var()
 
     #define n centers for initialization
     def set_centers (self, centers, n):
@@ -152,30 +139,12 @@ class Cluster:
         points = np.random.choice(np.arange(len(data)), replace = False, size = n)
         self._centers = data [points, 0:2]
 
-    #driver method, retreive best result after n iterations
-    def process_data (self, n_iter):
-        minDist = 100
-        centers = self._centers
-        data = self._data
-        lam = 150
-        for i in range (n_iter):
-            self._centers = self.wasserstein(lam)
-            self._data = self.cluster_assignment()
-            dist = self.calc_avg_dist()
-            print (dist)
-            if (i == 0 or dist < minDist):
-                minDist = dist
-                centers = self._centers         
-            self.randomize_centers()
-
-        self._centers = centers
-        self._data = self.cluster_assignment()
-
     #method for learning smoothing parameter
     def learn_lam (self, n_iter, rand_centers):
         centers = self._centers
         data = self._data
         lam = np.random.randint(low = len(self._data) / 2, high = len(self._data))
+        #lam = np.percentile (len(self._data), 75)
         minDist = 100; prev_lam = 0; flam = 0; dist = 10; low = 1; high = 5; diminish = 1; found = 0
         for i in range (n_iter):
             self._centers = self.wasserstein(lam)
@@ -226,12 +195,12 @@ class Cluster:
 
     #calc driving distance between 2 coordinates
     def driving_distance (self, coord1, coord2):
-        orig_coord = coord1 [0], coord1 [1]
-        dest_coord = coord2 [0], coord2 [1]
+        orig_coord = "{0},{1}".format(str(coord1 [0]),str(coord1 [1]))
+        dest_coord = "{0},{1}".format(str(coord2 [0]),str(coord2 [1]))
         url = "http://maps.googleapis.com/maps/api/distancematrix/json?origins={0}&destinations={1}&mode=driving&language=en-EN&sensor=false".format(str(orig_coord),str(dest_coord))
         result = simplejson.load(urllib.request.urlopen(url))
-        driving_time = result['rows'][0]['elements'][0]['duration']['value']
-        return driving_time
+        driving_time = result['rows'][0]['elements'][0]['distance']['value']
+        return float(driving_time)
 
     #driver method for kmeans
     def process_data_kmeans (self, init):
@@ -243,10 +212,6 @@ class Cluster:
     #return average distance
     def get_dist (self):
         return self.calc_avg_dist()
-
-    #return cluster size statistics
-    def get_cluster_stats (self):
-        return self.cluster_size_stats()
 
     #return data
     def get_data (self):
