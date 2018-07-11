@@ -15,7 +15,14 @@ We have developed a clustering and prediction method that forms the back end of 
 2. Clone to your local repository
 
 ### Usage
+#### Point Process
 ![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/load_train.png )
+![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/examine.png )
+![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/hotspots.png )
+![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/testpredict.png )
+![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/update_csv.png )
+![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/ex.png )
+![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/locs_for_wasserstein.png )
 
 ### Authors
 * marches
