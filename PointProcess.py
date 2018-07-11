@@ -18,7 +18,7 @@ class PointProcessTrain:
     #time_step selects multiplier for dt
     def __init__ (self, training_points, xgridsize = 100, ygridsize = 100, 
         xmin = -86.3283, xmax =  -85.8942, ymin = 39.6277, ymax = 39.9277, 
-        w = [.5, .1, .05], pred_interval_label = '15minutes', update_with_trends = False, track_granularity = 1000, lam_memory = 500,
+        w = [.5, .1, .05], pred_interval_label = '15minutes', track_granularity = 1000, lam_memory = 500,
         final_param_save_loc = 'Trained_Params.npz', param_track_save_loc = 'Track_Of_Params.npz'):
         
         self._data = training_points 
@@ -32,7 +32,7 @@ class PointProcessTrain:
 
         self._w = array(w)
         self._K = len(w)
-        self._mu = np.ones([self._xsize, self._ysize])*0.02
+        self._mu = np.ones([self._xsize, self._ysize])*0.00002
         self._F = np.ones([self._xsize, self._ysize, self._K])*.1
         self._Lam = np.ones([self._xsize, self._ysize])*0.001
         self._theta = np.ones([self._K])*.1
@@ -63,8 +63,6 @@ class PointProcessTrain:
         self._hour_vector_subdivision_lookup = {'hours': 1, '15minutes': 4, 'minutes': 60}
         self._hour_subdivision = self._hour_vector_subdivision_lookup[pred_interval_label]
         self._hour = np.ones(24*self._hour_subdivision)*1/(24*self._hour_subdivision)
-
-        self._update_with_trends = update_with_trends
 
     def coord_to_grid(self, xcoord, ycoord):
         if xcoord < self._xmin:
@@ -125,7 +123,7 @@ class PointProcessTrain:
         g_time_delta = (event_time - Gtimes.at[gx,gy]).total_seconds()*self._time_scale
         Gtimes.at[gx,gy] = event_time
 
-        Lam_g = self.get_intensity(mu[gx][gy], F[gx][gy], hour_prob[curr_hour], day_prob[curr_day], time_weighted = self._update_with_trends)
+        Lam_g = self.get_intensity(mu[gx][gy], F[gx][gy], hour_prob[curr_hour], day_prob[curr_day], time_weighted = False)
         if Lam_g == 0:
             Lam_g = 1e-70
         mu[gx][gy] = mu[gx][gy] + dt * (mu[gx][gy]/Lam_g - mu[gx][gy] * g_time_delta)
@@ -147,14 +145,11 @@ class PointProcessTrain:
         else:
             print("Shape of F not appropriate. It is: " + str(F.shape))
 
-        if time_weighted and not self._update_with_trends:
+        if time_weighted:
             # If model parameters are not normally calculated with trends factored in, need to scale day_prob so Lambda comes out in #/hour_subdivision.
             day_prob = day_prob * 7
             Lam = (mu + sum_F)*hour_prob*day_prob
-        elif time_weighted and self._update_with_trends:
-            # If model parameters are calculated with trends, this is the way that all values of lambda are calculated. No need to do any scaling.
-            Lam = (mu + sum_F)*hour_prob*day_prob
-        elif not time_weighted and not self._update_with_trends:
+        elif not time_weighted:
             # This is for calculating model parameters without factoring trends in. 
             Lam = mu + sum_F
         else:
@@ -206,7 +201,6 @@ class PointProcessTrain:
             grid_times = self._Gtimes.values, time_scale = self._time_scale_label, 
             grid_info = [self._xsize, self._ysize, self._xmin, self._xmax, self._ymin, self._ymax],
             last_time = self._LastTime, pred_interval_hourly_subdivision = self._hour_subdivision, 
-            update_with_trends = self._update_with_trends, 
             save_loc = self._save_out)
 
         if save_tracked_params:
@@ -328,8 +322,6 @@ class PointProcessRun(PointProcessTrain):
         self._ymin = float(trained_params['grid_info'][4])
         self._ymax = float(trained_params['grid_info'][5])
 
-        self._update_with_trends = trained_params['update_with_trends']
-
     def update_from_new_inputs(self, update_csv):
         # update_csv should have headers and format: DATE_TIME (datetime string, format='%Y-%m-%d %H:%M:%S'), XCOORD (longitude), YCOORD (latitude)
         
@@ -416,7 +408,7 @@ class PointProcessRun(PointProcessTrain):
 
         return intensity_predictions, array(times), time_increment
 
-    def get_events_for_api(self, start_time, num_periods, top_percent = 90):
+    def get_events_for_api(self, start_time, num_periods, top_percent = 0):
         # formats future predictions for the api
         intensity_predictions, times, time_increment = self.get_future_events(start_time, num_periods, top_percent)
 
@@ -430,7 +422,7 @@ class PointProcessRun(PointProcessTrain):
     def get_time_increment(self):
         return (1 / self._hour_subdivision)/self._time_scaling_lookup['hours'] 
 
-    def test_projection(self, test_points, num_hotspots = 10, top_percent = 90):
+    def test_projection(self, test_points, num_hotspots = 10, top_percent = 0):
         # test points is a data frame with labels DATE_TIME (datetime format), XCOORD, YCOORD
         time_period = (test_points.DATE_TIME[len(test_points)-1] - test_points.DATE_TIME[0]).total_seconds()
 
@@ -495,7 +487,7 @@ class PointProcessRun(PointProcessTrain):
                 y = actual_locs[i][1]
                 print("Grid: " + str(actual_locs[i]) +", Model: "+ str(pred_num_events[x][y]) + ", Real: " + str(tot_events[x][y]))
 
-        return intensity_predictions, time_increments, pred_num_events, pred_locs, tot_events, actual_locs
+        return intensity_predictions, time_increments, pred_num_events, pred_locs, tot_events, actual_locs, pai
 
     def predictive_accuracy(self, tot_pred, pred_locs, tot_events):
         hit_num = 0
