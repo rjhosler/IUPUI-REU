@@ -101,7 +101,7 @@ class PointProcessTrain:
         last_event_time = event_time
 
         # update periodic trends
-        dt_day = .00005
+        dt_day = .0001
         day_prob = (1-dt_day)*day_prob
         day_prob[curr_day] += dt_day
 
