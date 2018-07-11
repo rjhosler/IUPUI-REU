@@ -26,11 +26,12 @@ from PointProcess import PointProcessTrain
 from PointProcess import PointProcessRun
 import json
 from bson import json_util
+import time
 
 from flask import Flask, redirect, url_for, request, jsonify     
 app = Flask(__name__)
 
-PointProcess = PointProcessRun('TrainedParamsForBrain.npz')
+PointProcess = PointProcessRun(param_location = 'Trained_Params_100_100.npz')
 
 @app.route('/emergencies')
 def emergencies():
@@ -46,9 +47,8 @@ def emergencies():
     start_time =  datetime.datetime.fromtimestamp(float(start_time))
     total_output = []
 
-    predictions, times, increment = PointProcess.get_events_for_api(start_time, interval_count)
-
-
+    predictions, times, increment = PointProcess.get_events_for_api(start_time, interval_count, top_percent = 0)
+    
     for j in range (int(interval_count)):            
         output = {
             'start': times[j],
@@ -64,6 +64,7 @@ def emergencies():
                     }
             })
         total_output.append (output)
+        print (len(output['emergencies']))
         
     filePathNameWExt = 'emergencies.json'
     with open(filePathNameWExt, 'w') as fp:
@@ -100,7 +101,6 @@ def assignments():
         interval_count = data ['interval_count']
         virtual = trucks [:,2]
         
-        #assignments = dummy_data (trucks, interval_time, interval_count, em_data)
         assignments = wasserstein_cluster (trucks, interval_time, interval_count, start_time, em_data)
 
         output = {
@@ -146,20 +146,6 @@ def filter_data (data):
         trucks [i,3] = data [i]['id']
         trucks [i,4] = data [i]['type']
     return trucks
-    
-def dummy_data (trucks, interval_time, interval_count, em_data):    
-    data = np.zeros((len(trucks),3))
-    data[:,0] = trucks [:,0]
-    data[:,1] = trucks [:,1]
-    data[:,2] = trucks [:,2]
-    data = data.tolist()
-    data = [[lat, long, virtual] for (lat, long, virtual) in data if virtual == True]
-    data = np.array(data)
-
-    kmeans = KMeans(n_clusters = len(data)).fit(data[:,0:2])
-    centers = kmeans.cluster_centers_
-
-    return centers
 
 #practical assignments
 '''
@@ -169,24 +155,51 @@ def dummy_data (trucks, interval_time, interval_count, em_data):
     4.) Cluster the data and return the centers
 '''
 def wasserstein_cluster (trucks, interval_time, interval_count, start_time, em_data):
-    data = shrink_data (em_data, interval_count, trucks)
-    #how cluster data will be handles in the future
-    grid_loc = PointProcess.locs_for_wasserstein (start_time, interval_count)
+    data = shrink_data (trucks)
+    grid_loc = PointProcess.locs_for_wasserstein (start_time, interval_count, 90)
 
     cluster = Cluster (grid_loc, len(data))
     cluster.set_centers (data[:,0:2], len(data))
+
+    start = time.time()
     lam = cluster.learn_lam(5, False)
+    end = time.time()
+    print(end - start, "seconds")
+    
     centers = cluster.get_centers()
     data = cluster.get_data()
+    dist = cluster.get_dist()
+    print (dist)
 
+    heatmap, xedges, yedges = np.histogram2d(data[:,1], data[:,0], bins = 75)
+    extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+
+    plt.clf()
     plt.title ('Wasserstein')
-    plt.scatter(data[:,0], data[:,1])
-    plt.scatter(centers[:,0], centers[:,1], c = 'red', s = 100, alpha = 0.5)
+    plt.imshow(heatmap.T, extent=extent, origin='lower')
+    plt.scatter(centers[:,1], centers[:,0], c = 'red', s = 100, alpha = 0.5)
+    plt.savefig ('wasserstein_graph.png', bbox_inches='tight')
+    plt.show()
+    plt.close()
+
+    cluster.round_off()
+    data = cluster.get_data()
+    centers = cluster.get_centers()
+    dist = cluster.get_dist()
+    print (dist)
+
+    heatmap, xedges, yedges = np.histogram2d(data[:,1], data[:,0], bins = 75)
+    extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+
+    plt.clf()
+    plt.title ('Wasserstein + Round Off')
+    plt.imshow(heatmap.T, extent=extent, origin='lower')
+    plt.scatter(centers[:,1], centers[:,0], c = 'red', s = 100, alpha = 0.5)
     plt.show()
     
     return centers
 
-def shrink_data (em_data, interval_count, trucks):
+def shrink_data (trucks):
     data = np.zeros((len(trucks),3))
     data[:,0] = trucks [:,0]
     data[:,1] = trucks [:,1]
@@ -194,25 +207,243 @@ def shrink_data (em_data, interval_count, trucks):
     data = data.tolist()
     data = [[lat, long, virtual] for (lat, long, virtual) in data if virtual == True]
     data = np.array(data)
-    '''
-    em_shrink = sum (em_data [0:interval_count,:])
-    em_shrink [:,0:2] = em_shrink [:,0:2] / interval_count
-    grid_loc = np.empty((0,0))
-    lst = em_shrink[:,2].tolist()
-    scom = max(set(lst), key=lst.count)
-    
-    for i in range (len(em_shrink)):
-        if (em_shrink [i,2] != scom and em_shrink [i,2] > 0.0):
-            loc = em_shrink[i]
-            grid_loc = np.append(grid_loc, loc)
-    grid_loc = grid_loc.reshape ((len(grid_loc) // 3, 3))
-    temp = np.copy(grid_loc [:,0])
-    grid_loc [:,0] = grid_loc [:,1]
-    grid_loc [:,1] = temp
-    
-    return grid_loc, data
-    '''
     return data
 
 if __name__ == '__main__':
     app.run()
+'''
+{
+      "id": "11",
+      "type": "11",
+      "location": {
+        "lat": 39.64776452320278, 
+        "long": -86.43639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "12",
+      "type": "12",
+      "location": {
+        "lat": 39.64776452320278, 
+        "long": -86.43639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "13",
+      "type": "13",
+      "location": {
+        "lat": 39.74776452320278, 
+        "long": -86.03639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "14",
+      "type": "14",
+      "location": {
+        "lat": 39.73776452320278, 
+        "long": -86.00639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "15",
+      "type": "15",
+      "location": {
+        "lat": 39.94776452320278, 
+        "long": -86.13639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "16",
+      "type": "16",
+      "location": {
+        "lat": 39.64776452320278, 
+        "long": -86.43639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "17",
+      "type": "17",
+      "location": {
+        "lat": 39.64776452320278, 
+        "long": -86.43639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "18",
+      "type": "18",
+      "location": {
+        "lat": 39.64776452320278, 
+        "long": -86.43639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "19",
+      "type": "19",
+      "location": {
+        "lat": 39.74776452320278, 
+        "long": -86.03639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "20",
+      "type": "20",
+      "location": {
+        "lat": 39.73776452320278, 
+        "long": -86.00639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "21",
+      "type": "21",
+      "location": {
+        "lat": 39.94776452320278, 
+        "long": -86.13639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "22",
+      "type": "22",
+      "location": {
+        "lat": 39.64776452320278, 
+        "long": -86.43639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "23",
+      "type": "23",
+      "location": {
+        "lat": 39.64776452320278, 
+        "long": -86.43639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "24",
+      "type": "24",
+      "location": {
+        "lat": 39.64776452320278, 
+        "long": -86.43639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "25",
+      "type": "25",
+      "location": {
+        "lat": 39.74776452320278, 
+        "long": -86.03639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "26",
+      "type": "26",
+      "location": {
+        "lat": 39.73776452320278, 
+        "long": -86.00639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "27",
+      "type": "27",
+      "location": {
+        "lat": 39.94776452320278, 
+        "long": -86.13639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "28",
+      "type": "28",
+      "location": {
+        "lat": 39.64776452320278, 
+        "long": -86.43639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "29",
+      "type": "29",
+      "location": {
+        "lat": 39.64776452320278, 
+        "long": -86.43639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "30",
+      "type": "30",
+      "location": {
+        "lat": 39.64776452320278, 
+        "long": -86.43639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "31",
+      "type": "31",
+      "location": {
+        "lat": 39.74776452320278, 
+        "long": -86.03639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "32",
+      "type": "32",
+      "location": {
+        "lat": 39.73776452320278, 
+        "long": -86.00639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "33",
+      "type": "33",
+      "location": {
+        "lat": 39.94776452320278, 
+        "long": -86.13639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "34",
+      "type": "34",
+      "location": {
+        "lat": 39.64776452320278, 
+        "long": -86.43639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "35",
+      "type": "35",
+      "location": {
+        "lat": 39.64776452320278, 
+        "long": -86.43639589015738
+      },
+      "virtual": true
+  	},
+  	{
+      "id": "36",
+      "type": "36",
+      "location": {
+        "lat": 39.64776452320278, 
+        "long": -86.43639589015738
+      },
+      "virtual": true
+  	}
+'''
