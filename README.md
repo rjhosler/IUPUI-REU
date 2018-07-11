@@ -15,7 +15,7 @@ We have developed a clustering and prediction method that forms the back end of 
 2. Clone to your local repository
 
 ### Usage
-Todo
+![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/load_train.png )
 
 ### Authors
 * marches
