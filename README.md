@@ -24,6 +24,22 @@ We have developed a clustering and prediction method that forms the back end of 
 ![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/ex.png )
 ![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/locs_for_wasserstein.png )
 
+#### Wasserstein
+
+Example:
+* cluster = Cluster (data,n)
+    * data: what to cluster over
+    * n: number of clusters
+* cluster.set_centers (centers[:,0:2], len(centers))
+    * centers: points to initialize the centers with
+* lam = cluster.learn_lam(n_iter = 5, rand_centers =  False)
+    * n_iter:  number of iterations
+    * rand_centers: setting this to false will restore the centers back to where they were before cluster computation.
+
+
+#### Brain API
+Coming soon :)
+
 ### Authors
 * marches
 * rjhosler
