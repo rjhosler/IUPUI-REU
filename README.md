@@ -3,15 +3,15 @@ We have developed a clustering and prediction method that forms the back end of 
 
 ### Instillation
 1. Requirements
-  * Python 3
-  * Matplotlib
-  * Numpy
-  * Scipy
-  * Sklearn
-  * Pandas
-  * Haversine
-  * Simplejson, urllib, urllib.request, json, bson, bson_util, pymongo
-  * Flask
+    * Python 3
+    * Matplotlib
+    * Numpy
+    * Scipy
+    * Sklearn
+    * Pandas
+    * Haversine
+    * Simplejson, urllib, urllib.request, json, bson, bson_util, pymongo
+    * Flask
 2. Clone to your local repository
 
 ### Usage
