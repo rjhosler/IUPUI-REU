@@ -2,7 +2,7 @@
 We have developed a clustering and prediction method that forms the back end of an app designed with the Indianapolis EMS department to decrease their overall response time to medical emergencies. Our method uses an online Hawkes process estimation algorithm to model and predict the probability of medical events in specified grid cells. We use calculations of Wasserstein Barycenters to place ambulances in optimal locations during predicted peak event times. Moreover, our method is extendable to other spatial-temporal processes and available as an API for public use. 
 
 ### Instillation
-1. Requirements
+* Requirements
     * Python 3
     * Matplotlib
     * Numpy
@@ -12,7 +12,7 @@ We have developed a clustering and prediction method that forms the back end of 
     * Haversine
     * Simplejson, urllib, urllib.request, json, bson, bson_util, pymongo
     * Flask
-2. Clone to your local repository
+* Clone to your local repository
 
 ### Usage
 #### Point Process
@@ -32,11 +32,11 @@ We have developed a clustering and prediction method that forms the back end of 
    * ![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/locs_for_wasserstein.png )
 
 #### Wasserstein
-Here is an example of Wasserstein clustering using locations passed in from PointProcessRun class: 
-![alt_text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/wasser.png )
+* Here is an example of Wasserstein clustering using locations passed in from PointProcessRun class: 
+   * ![alt_text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/wasser.png )
 
-Running Wasserstein over predicted intensities yields results shuch as this:
-![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/wasserstein_graph.png )
+* Running Wasserstein over predicted intensities yields results shuch as this:
+   * ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/wasserstein_graph.png )
 
 ### Authors
 * marches
