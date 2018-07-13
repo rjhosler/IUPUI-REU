@@ -32,9 +32,9 @@ class PointProcessTrain:
 
         self._w = array(w)
         self._K = len(w)
-        self._mu = np.ones([self._xsize, self._ysize])*0.00002
+        self._mu = np.zeros([self._xsize, self._ysize])  # initialize later, if called
         self._F = np.ones([self._xsize, self._ysize, self._K])*.1
-        self._Lam = np.ones([self._xsize, self._ysize])*0.001
+        self._Lam = np.ones([self._xsize, self._ysize])*0.00001
         self._theta = np.ones([self._K])*.1
         self._Gtimes = pd.DataFrame(np.zeros([xgridsize, ygridsize]))
         self._Gtimes[:] = self._data.DATE_TIME[0]
@@ -114,18 +114,23 @@ class PointProcessTrain:
     
     def local_update(self, Gtimes, event_time, day_prob, hour_prob, F, mu, theta, gx, gy):
 
+        # Mu initialized if it neeeds to be!!
+        if mu[gx][gy] == 0.0000000000:
+            mu[gx][gy] = .2
+
         # find day and hour
         curr_day = event_time.weekday()
         curr_hour = self.get_hour_vec_indx(event_time)
 
         # local update based on where event occurred
-        dt = 0.005
+        dt = 0.0025
         g_time_delta = (event_time - Gtimes.at[gx,gy]).total_seconds()*self._time_scale
         Gtimes.at[gx,gy] = event_time
 
         Lam_g = self.get_intensity(mu[gx][gy], F[gx][gy], hour_prob[curr_hour], day_prob[curr_day], time_weighted = False)
         if Lam_g == 0:
             Lam_g = 1e-70
+
         mu[gx][gy] = mu[gx][gy] + dt * (mu[gx][gy]/Lam_g - mu[gx][gy] * g_time_delta)
 
         theta = theta + dt * (F[gx][gy]/Lam_g - theta)
@@ -190,7 +195,10 @@ class PointProcessTrain:
                 self._F_track[indx] = self._F
 
                 if progress_bar:
-                    print(str(i/self._data_length*100) + " percent trained\n")
+                    print(str(i/self._data_length*100) + " percent trained")
+
+            
+        self._Lam = self.get_intensity(self._mu, self._F, self._hour[curr_hour], self._day[curr_day], time_weighted = True)
                 
         self.save_params(save_tracked_params = True)
 
@@ -208,19 +216,26 @@ class PointProcessTrain:
 
     def param_examine(self):
         for i in range(0, self._K):
-            plt.plot(np.transpose(self._theta_track)[i], label="w = " + str(self._w[i]))
+            plt.plot(np.transpose(self._theta_track)[i][1:], label="w = " + str(self._w[i]))
         plt.title("data points vs. theta")
         plt.legend()
         plt.show()
 
-        print("\nHour vector: ")
-        print(self._hour)
+        mu_sum = np.zeros(len(self._mu_track))
+        for i in range(0, len(mu_sum)):
+            mu_sum[i] = sum(sum(self._mu_track[i]))
+        plt.plot(mu_sum[1:])
+        plt.title("sum of all background rates")
+        plt.show()
+
         print("Hour vector sum: ")
         print(sum(self._hour))
-        print("\nDay vector: ")
-        print(self._day)
         print("Day vector sum: ")
         print(sum(self._day))
+        print("\nDay vector: ")
+        print(self._day)
+        print("\nHour vector: ")
+        print(self._hour)
 
     def model_hotspot_examine(self, num_points, num_hotspots = 10):
         # examine how top model cells compare to actual top cells over data used for training
@@ -237,6 +252,10 @@ class PointProcessTrain:
         print("Location and value of largest and smallest sum(Lambda): ")
         print(np.amax(sum_intensity), unravel_index(sum_intensity.argmax(), sum_intensity.shape),
             np.amin(sum_intensity), unravel_index(sum_intensity.argmin(), sum_intensity.shape))
+
+        print("\nLocation and value of largest and smallest (final) background rate: ")
+        print(np.amax(self._mu), unravel_index(self._mu.argmax(), self._mu.shape),
+            np.amin(self._mu), unravel_index(self._mu.argmin(), self._mu.shape))
 
         tot_events = np.zeros([self._xsize, self._ysize])
         for i in range(start, end):
@@ -322,10 +341,9 @@ class PointProcessRun(PointProcessTrain):
         self._ymin = float(trained_params['grid_info'][4])
         self._ymax = float(trained_params['grid_info'][5])
 
-    def update_from_new_inputs(self, update_csv):
-        # update_csv should have headers and format: DATE_TIME (datetime string, format='%Y-%m-%d %H:%M:%S'), XCOORD (longitude), YCOORD (latitude)
+    def update_from_new_inputs(self, update_data, save_out = True):
+        # update_data should be a dataframe and should have headers and format: DATE_TIME (datetime string, format='%Y-%m-%d %H:%M:%S'), XCOORD (longitude), YCOORD (latitude)
         
-        update_data = pd.read_csv(update_csv)
         new_points = len(update_data)
         update_data.DATE_TIME = pd.to_datetime(update_data.DATE_TIME, format='%Y-%m-%d %H:%M:%S')
         update_data = update_data.sort_values(by = 'DATE_TIME')
@@ -358,10 +376,12 @@ class PointProcessRun(PointProcessTrain):
             # local update: 
             self._F, self._mu, self._theta, self._Gtimes = self.local_update(self._Gtimes, update_data.DATE_TIME[i],
                 self._day, self._hour, self._F, self._mu, self._theta, gx, gy)
-
-        self.save_params()
-
         msg = 'Parameters updated: ' + str(new_points) + ' used for update ranging from: '+ update_data.DATE_TIME[0].strftime('%Y-%m-%d %H:%M:%S') + ' to ' + update_data.DATE_TIME[new_points-1].strftime('%Y-%m-%d %H:%M:%S')+'.'
+
+        if save_out:
+            self.save_params()
+            msg = 'Parameters updated: ' + str(new_points) + ' used for update ranging from: '+ update_data.DATE_TIME[0].strftime('%Y-%m-%d %H:%M:%S') + ' to ' + update_data.DATE_TIME[new_points-1].strftime('%Y-%m-%d %H:%M:%S')+'. Params also saved.'
+        
         return msg
 
     def calculate_future_intensity(self, future_time, decay = False):  
