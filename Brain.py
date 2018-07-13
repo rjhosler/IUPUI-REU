@@ -72,6 +72,24 @@ def emergencies():
 
     return jsonify(total_output)
 
+
+@app.route('/SingleProcessUpdate')
+def SingleProcessUpdate():
+    #http://127.0.0.1:5000/SingleProcessUpdate?xcoord=1530798259&ycoord=0
+    #info should have form of: xcoord, ycoord, datetime str '%Y-%m-%d %H:%M:%S', bool 
+    #if bool == True, the new parameters will be saved out to npz file
+    #inputs = pandas data frame with correct labels
+    #msg = PointProcess.update_from_new_inputs(inputs)
+    xcoord = [float(request.args.get('xcoord'))]
+    ycoord = [float(request.args.get('ycoord'))]
+    datetime = [request.args.get('datetime')]
+    update_df = {'XCOORD': xcoord, 'YCOORD': ycoord, 'DATE_TIME': datetime}
+    print(datetime, xcoord, ycoord)
+    update_df = pd.DataFrame(update_df)
+    msg = PointProcess.update_from_new_inputs(update_df)
+
+    return msg
+
 @app.route('/ProcessUpdate/<name>')
 def ProcessUpdate(name):
     msg = PointProcess.update_from_new_inputs(name)
