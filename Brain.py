@@ -200,9 +200,9 @@ def wasserstein_cluster (trucks, interval_time, interval_count, start_time, em_d
     plt.imshow(heatmap.T, extent=extent, origin='lower')
     plt.scatter(centers[:,1], centers[:,0], c = 'red', s = 100, alpha = 0.5)
     plt.show()
-    
+    print (centers)
     centers = close_assignment (centers, move_data)
-   
+    print (centers)
     return centers
 
 def shrink_data (trucks):
@@ -221,12 +221,15 @@ def shrink_data (trucks):
 def close_assignment (centers, trucks):
     ordered_centers = centers
     mindist = 9999
+    pos = 0
     for i in range (len(trucks)):
         for j in range (len(centers)):
             dist = la.norm (trucks [i, 0:2] - centers [j, :])
             if (j == 0 or dist < mindist):
                 mindist = dist
+                pos = j
                 ordered_centers [i, :] = centers [j, :]
+        centers = np.delete (centers, pos, 0)
     return ordered_centers
 
 if __name__ == '__main__':
