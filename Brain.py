@@ -155,12 +155,15 @@ def filter_data (data):
     4.) Cluster the data and return the centers
 '''
 def wasserstein_cluster (trucks, interval_time, interval_count, start_time, em_data):
-    data = shrink_data (trucks)
+    move_data, still_data = shrink_data (trucks)
     grid_loc = PointProcess.locs_for_wasserstein (start_time, interval_count, 90)
     end_time = start_time + datetime.timedelta(seconds = 15*60*interval_count)
 
-    cluster = Cluster (grid_loc, len(data))
-    cluster.set_centers (data[:,0:2], len(data))
+    cluster = Cluster (grid_loc, len(move_data))
+    cluster.set_centers (move_data[:,0:2], len(move_data))
+    if (still_data.size > 0):
+        print ('removing points')
+        cluster.remove_points (still_data [:,0:2])
 
     start = time.time()
     lam = cluster.learn_lam(5, False)
@@ -198,6 +201,8 @@ def wasserstein_cluster (trucks, interval_time, interval_count, start_time, em_d
     plt.scatter(centers[:,1], centers[:,0], c = 'red', s = 100, alpha = 0.5)
     plt.show()
     
+    centers = close_assignment (centers, move_data)
+   
     return centers
 
 def shrink_data (trucks):
@@ -206,9 +211,23 @@ def shrink_data (trucks):
     data[:,1] = trucks [:,1]
     data[:,2] = trucks [:,2]
     data = data.tolist()
-    data = [[lat, long, virtual] for (lat, long, virtual) in data if virtual == True]
-    data = np.array(data)
-    return data
+    data1 = [[lat, long, virtual] for (lat, long, virtual) in data if virtual == True]
+    data1 = np.array(data1)
+    data2 = [[lat, long, virtual] for (lat, long, virtual) in data if virtual == False]
+    data2 = np.array(data2)
+    return data1, data2
+
+#have trucks go to the assigned location that is closest to them
+def close_assignment (centers, trucks):
+    ordered_centers = centers
+    mindist = 9999
+    for i in range (len(trucks)):
+        for j in range (len(centers)):
+            dist = la.norm (trucks [i, 0:2] - centers [j, :])
+            if (j == 0 or dist < mindist):
+                mindist = dist
+                ordered_centers [i, :] = centers [j, :]
+    return ordered_centers
 
 if __name__ == '__main__':
     app.run()

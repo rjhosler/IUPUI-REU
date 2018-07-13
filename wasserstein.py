@@ -20,6 +20,7 @@ from scipy import stats
 import simplejson, urllib
 import urllib.request
 from PointProcess import PointProcessTrain
+import time
 
 #Class for processing data with wasserstein clustering
 class Cluster:
@@ -86,7 +87,7 @@ class Cluster:
         cluster_id = np.zeros ((len(self._data), 1))
         for i in range (len(self._data)):
             for j in range (len(self._centers)):
-                dist = la.norm (self._data [i, 0:2] - self._centers [j,:])
+                dist = la.norm (self._data [i, 0:2] - self._centers [j, :])
                 if (j == 0 or dist < minDist):
                     minDist = dist
                     cluster_id [i] = j
@@ -95,6 +96,32 @@ class Cluster:
         else:
             self._data [:, 3] = np.transpose (cluster_id)
             return self._data
+
+    #remove points that are closest to trucks that cannot move
+    def remove_points (self, still_data):
+        print (len(self._data))
+        iter_balance = 0
+        for i in range (len(self._data)):
+            i = i - iter_balance
+            for j in range (len(self._centers)):
+                dist = la.norm (self._data [i, 0:2] - self._centers [j, :])
+                if (j == 0 or dist < minDist):
+                    minDist = dist
+            #test for points that cannot move. if a point is closer to any of those points, remove it from the data
+            test_condition = True
+            rm_iter = 0
+            while (test_condition):
+                dist = la.norm (self._data [i, 0:2] - still_data [rm_iter, :])
+                if (dist < minDist):
+                    self._data = np.delete (self._data, i, 0)
+                    iter_balance += 1
+                    test_condition = False
+                rm_iter += 1
+                if (rm_iter == len (still_data)):
+                    test_condition = False
+        print (len(self._data))
+                    
+            
 
     #method to calculate average within cluster distance weighted by point intensities and balanced representation of clusters
     #NOTE: only works when cluster IDs have been assigned
@@ -109,6 +136,7 @@ class Cluster:
             for j in range (len(self._data)):
                 if (self._data [j, 3] == i):
                     dist_array = np.append (dist_array, haversine (self._centers [i, :], self._data [j, 0:2], miles = True))
+                    #dist_array = np.append (dist_array, self.driving_distance (self._centers [i, :], self._data [j, 0:2]))
                     isEmpty = False
                     size += 1
                     intensity += self._data [j, 2]
@@ -138,6 +166,7 @@ class Cluster:
         n = self._n
         points = np.random.choice(np.arange(len(data)), replace = False, size = n)
         self._centers = data [points, 0:2]
+        
 
     #method for learning smoothing parameter
     def learn_lam (self, n_iter, rand_centers):
@@ -199,7 +228,12 @@ class Cluster:
         dest_coord = "{0},{1}".format(str(coord2 [0]),str(coord2 [1]))
         url = "http://maps.googleapis.com/maps/api/distancematrix/json?origins={0}&destinations={1}&mode=driving&language=en-EN&sensor=false".format(str(orig_coord),str(dest_coord))
         result = simplejson.load(urllib.request.urlopen(url))
+        if (result['status'] == 'OVER_QUERY_LIMIT'):
+            print ('oof. try again')
+            time.sleep(1)
+            self.driving_distance(coord1, coord2)            
         driving_time = result['rows'][0]['elements'][0]['distance']['value']
+        print (driving_time)
         return float(driving_time)
 
     #driver method for kmeans
