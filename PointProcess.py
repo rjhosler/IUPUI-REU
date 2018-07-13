@@ -32,7 +32,7 @@ class PointProcessTrain:
 
         self._w = array(w)
         self._K = len(w)
-        self._mu = np.zeros([self._xsize, self._ysize])  # initialize later, if called
+        self._mu = np.ones([self._xsize, self._ysize])*0  # initialize later, if called
         self._F = np.ones([self._xsize, self._ysize, self._K])*.1
         self._Lam = np.ones([self._xsize, self._ysize])*0.00001
         self._theta = np.ones([self._K])*.1
@@ -140,7 +140,12 @@ class PointProcessTrain:
         return F, mu, theta, Gtimes
 
     def get_intensity(self, mu, F, hour_prob, day_prob, time_weighted):
-        # get intensity. time_weighted = boolean 
+        # get intensity. time_weighted = boolean
+
+        mu_no_zeros = np.copy(mu)
+        indx = mu_no_zeros < 0
+        
+        mu_no_zeros[indx] = 0
 
         if len(F.shape) == self._K:
             sum_F = np.sum(F, axis = 2)
@@ -153,7 +158,7 @@ class PointProcessTrain:
         if time_weighted:
             # If model parameters are not normally calculated with trends factored in, need to scale day_prob so Lambda comes out in #/hour_subdivision.
             day_prob = day_prob * 7
-            Lam = (mu + sum_F)*hour_prob*day_prob
+            Lam = (mu_no_zeros + sum_F)*hour_prob*day_prob
         elif not time_weighted:
             # This is for calculating model parameters without factoring trends in. 
             Lam = mu + sum_F
