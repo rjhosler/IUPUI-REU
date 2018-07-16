@@ -107,9 +107,6 @@ def login():
 @app.route('/assignments', methods = ['POST'])
 def assignments():
     if (request.method == 'POST'):
-
-        sample = np.load ('SampleOutputs.npz')
-        em_data = sample ['intensities']
     
         data = request.get_json()
         
@@ -119,7 +116,7 @@ def assignments():
         interval_count = data ['interval_count']
         virtual = trucks [:,2]
         
-        assignments = wasserstein_cluster (trucks, interval_time, interval_count, start_time, em_data)
+        assignments = wasserstein_cluster (trucks, interval_time, interval_count, start_time)
 
         output = {
             'date': start_time,
@@ -172,7 +169,7 @@ def filter_data (data):
     3.) Initialize centers with the locations of the true trucks
     4.) Cluster the data and return the centers
 '''
-def wasserstein_cluster (trucks, interval_time, interval_count, start_time, em_data):
+def wasserstein_cluster (trucks, interval_time, interval_count, start_time):
     move_data, still_data = shrink_data (trucks)
     grid_loc = PointProcess.locs_for_wasserstein (start_time, interval_count, 90)
     end_time = start_time + datetime.timedelta(seconds = 15*60*interval_count)
@@ -251,7 +248,6 @@ def close_assignment (centers, trucks):
             ordered_centers = np.copy(centers [pos, :])
         centers = np.delete (centers, pos, 0)
     ordered_centers = ordered_centers.reshape((len(ordered_centers) // 2, 2))
-    print (ordered_centers)
     return ordered_centers
 
 if __name__ == '__main__':

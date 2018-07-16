@@ -52,14 +52,14 @@ class Cluster:
             u = np.float64(u)
             change = 1
             max_iter2 = 0
-            while (change > 0.0001):
+            while (change > 0.001):
                 oldu = u
                 u = np.float64(np.transpose (np.ones(len(X)) / np.matmul (Kt, np.divide (b, np.matmul (np.transpose (K), u)))))
                 if (np.isnan(u).any() or np.isinf(u).any()):
                     print ("emergency exit")
                     return (X)
                 change = la.norm (u - oldu)
-                if (max_iter2 > lam * 2):
+                if (max_iter2 > np.amax([lam, 100])):
                     change = 0
                 max_iter2 += 1
             V = np.divide (b, np.matmul (np.transpose(K), u))        
@@ -67,7 +67,7 @@ class Cluster:
             oldX = X
             X = np.float64((X * (1 - theta)) + (np.divide (np.matmul (T, data), a) * theta))
             max_iter1 += 1
-            if (la.norm (oldX - X) < 0.0001 or max_iter1 > 100):
+            if (la.norm (oldX - X) < 0.005 or max_iter1 > 50):
                 return X
 
     #Alternate clustering method using k-means
@@ -172,7 +172,7 @@ class Cluster:
     def learn_lam (self, n_iter, rand_centers):
         centers = self._centers
         data = self._data
-        lam = len(self._data) / 2 
+        lam = len(self._data) / 4 
         #lam = np.random.randint(low = len(self._data) / 2, high = len(self._data))
         minDist = 100; prev_lam = 0; flam = 0; dist = 10; low = 1; high = 5; diminish = 1; found = 0
         for i in range (n_iter):
