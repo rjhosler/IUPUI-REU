@@ -36,7 +36,7 @@ class Cluster:
     #method to implement the wasserstein algorithm
     #return new centers
     def wasserstein (self, lam):
-        theta = 0.5
+        theta = 0.3
         a = 1 / len (self._centers)
         #use intensities for b
         b = self._data [:,2] / sum (self._data [:,2])
@@ -73,7 +73,7 @@ class Cluster:
     #Alternate clustering method using k-means
     def kmeans_cluster (self, init):
         if (init == True):
-            kmeans = KMeans(n_clusters = len(self._centers), init = self._centers, n_init = 1, max_iter = 1).fit(self._data[:,0:2])
+            kmeans = KMeans(n_clusters = len(self._oldcenters), init = self._oldcenters, n_init = 1, max_iter = 10).fit(self._data[:,0:2])
             self._centers = kmeans.cluster_centers_
             self._data [:, 3] = kmeans.labels_
         else:
@@ -99,7 +99,7 @@ class Cluster:
 
     #remove points that are closest to trucks that cannot move
     def remove_points (self, still_data):
-        print (len(self._data))
+        before = len(self._data)
         iter_balance = 0
         for i in range (len(self._data)):
             i = i - iter_balance
@@ -119,8 +119,7 @@ class Cluster:
                 rm_iter += 1
                 if (rm_iter == len (still_data)):
                     test_condition = False
-        print (len(self._data))
-                    
+        print (before - len(self._data), "points removed")                 
             
 
     #method to calculate average within cluster distance weighted by point intensities and balanced representation of clusters
@@ -159,6 +158,7 @@ class Cluster:
     def set_centers (self, centers, n):
         busy = np.random.choice(np.arange(len(centers)), replace = False, size = n)
         self._centers = centers [busy]
+        self._oldcenters = self._centers
 
     #randomize centers
     def randomize_centers (self):
@@ -172,7 +172,7 @@ class Cluster:
     def learn_lam (self, n_iter, rand_centers):
         centers = self._centers
         data = self._data
-        lam = len(self._data) / 4 
+        lam = len(self._data) / 4
         #lam = np.random.randint(low = len(self._data) / 2, high = len(self._data))
         minDist = 100; prev_lam = 0; flam = 0; dist = 10; low = 1; high = 5; diminish = 1; found = 0
         for i in range (n_iter):

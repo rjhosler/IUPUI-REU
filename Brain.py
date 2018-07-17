@@ -171,7 +171,7 @@ def filter_data (data):
 '''
 def wasserstein_cluster (trucks, interval_time, interval_count, start_time):
     move_data, still_data = shrink_data (trucks)
-    grid_loc = PointProcess.locs_for_wasserstein (start_time, interval_count, 90)
+    grid_loc = PointProcess.locs_for_wasserstein (start_time, interval_count, 80)
     end_time = start_time + datetime.timedelta(seconds = 15*60*interval_count)
 
     cluster = Cluster (grid_loc, len(move_data))
@@ -184,40 +184,48 @@ def wasserstein_cluster (trucks, interval_time, interval_count, start_time):
     lam = cluster.learn_lam(5, False)
     end = time.time()
     print(end - start, "seconds")
-    
+    data = grid_loc
+    bincount = 90
+
+    #Wasserstein
     centers = cluster.get_centers()
-    data = cluster.get_data()
     dist = cluster.get_dist()
     print (dist)
 
-    heatmap, xedges, yedges = np.histogram2d(data[:,1], data[:,0], bins = 75)
+    heatmap, xedges, yedges = np.histogram2d(data[:,1], data[:,0], bins = bincount)
     extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
 
     plt.clf()
     plt.title ('From {} to {}'.format(str(start_time), str(end_time)))
     plt.imshow(heatmap.T, extent=extent, origin='lower')
     plt.scatter(centers[:,1], centers[:,0], c = 'red', s = 100, alpha = 0.5)
+    if (still_data.size > 0):
+        plt.scatter(still_data[:,1], still_data[:,0], c = 'green', s = 100, alpha = 0.5)
     plt.savefig ('wasserstein_graph.png', bbox_inches='tight')
     plt.show()
     plt.close()
 
+    final = centers
+
+    #Wasserstein + roundoff
     cluster.round_off()
-    data = cluster.get_data()
     centers = cluster.get_centers()
     dist = cluster.get_dist()
     print (dist)
 
-    heatmap, xedges, yedges = np.histogram2d(data[:,1], data[:,0], bins = 75)
+    heatmap, xedges, yedges = np.histogram2d(data[:,1], data[:,0], bins = bincount)
     extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
 
     plt.clf()
     plt.title ('Wasserstein + Round Off')
     plt.imshow(heatmap.T, extent=extent, origin='lower')
     plt.scatter(centers[:,1], centers[:,0], c = 'red', s = 100, alpha = 0.5)
+    if (still_data.size > 0):
+        plt.scatter(still_data[:,1], still_data[:,0], c = 'green', s = 100, alpha = 0.5)
     plt.show()
     
-    centers = close_assignment (centers, move_data)
-    
+    centers = final
+    centers = close_assignment (centers, move_data)    
     return centers
 
 def shrink_data (trucks):
