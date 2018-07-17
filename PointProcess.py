@@ -33,7 +33,7 @@ class PointProcessTrain:
         self._w = array(w)
         self._K = len(w)
         self._mu = np.ones([self._xsize, self._ysize])*0  # initialize later, if called
-        self._F = np.ones([self._xsize, self._ysize, self._K])*.1
+        self._F = np.ones([self._xsize, self._ysize, self._K])*.01
         self._Lam = np.ones([self._xsize, self._ysize])*0.00001
         self._theta = np.ones([self._K])*.1
         self._Gtimes = pd.DataFrame(np.zeros([xgridsize, ygridsize]))
@@ -63,6 +63,7 @@ class PointProcessTrain:
         self._hour_vector_subdivision_lookup = {'hours': 1, '15minutes': 4, 'minutes': 60}
         self._hour_subdivision = self._hour_vector_subdivision_lookup[pred_interval_label]
         self._hour = np.ones(24*self._hour_subdivision)*1/(24*self._hour_subdivision)
+        
 
     def coord_to_grid(self, xcoord, ycoord):
         if xcoord < self._xmin:
@@ -90,7 +91,7 @@ class PointProcessTrain:
     def global_update(self, event_time, last_event_time, day_prob, hour_prob, F):
         # F is in matrix form here
 
-        # find day and hour
+        # find day and hour and 
         curr_day = event_time.weekday()
         curr_hour = self.get_hour_vec_indx(event_time)
 
@@ -99,6 +100,7 @@ class PointProcessTrain:
         last_event_time = event_time
 
         # update periodic trends
+
         dt_day = .0001
         day_prob = (1-dt_day)*day_prob
         day_prob[curr_day] += dt_day
@@ -116,18 +118,18 @@ class PointProcessTrain:
 
         # Mu initialized if it neeeds to be!!
         if mu[gx][gy] == 0.0000000000:
-            mu[gx][gy] = .2
+            mu[gx][gy] = .1
 
         # find day and hour
         curr_day = event_time.weekday()
         curr_hour = self.get_hour_vec_indx(event_time)
 
         # local update based on where event occurred
-        dt = 0.0025
+        dt = 0.008
         g_time_delta = (event_time - Gtimes.at[gx,gy]).total_seconds()*self._time_scale
         Gtimes.at[gx,gy] = event_time
 
-        Lam_g = self.get_intensity(mu[gx][gy], F[gx][gy], hour_prob[curr_hour], day_prob[curr_day], time_weighted = False)
+        Lam_g = self.get_intensity(mu[gx][gy], F[gx][gy], hour_prob[curr_hour], day_prob[curr_day], for_event_numbers = False)
         if Lam_g == 0:
             Lam_g = 1e-70
 
@@ -139,8 +141,8 @@ class PointProcessTrain:
 
         return F, mu, theta, Gtimes
 
-    def get_intensity(self, mu, F, hour_prob, day_prob, time_weighted):
-        # get intensity. time_weighted = boolean
+    def get_intensity(self, mu, F, hour_prob, day_prob, for_event_numbers):
+        # get intensity. for_event_numbers = boolean
 
         mu_no_zeros = np.copy(mu)
         indx = mu_no_zeros < 0
@@ -155,11 +157,15 @@ class PointProcessTrain:
         else:
             print("Shape of F not appropriate. It is: " + str(F.shape))
 
-        if time_weighted:
+        if for_event_numbers:
             # If model parameters are not normally calculated with trends factored in, need to scale day_prob so Lambda comes out in #/hour_subdivision.
-            day_prob = day_prob * 7
+            day_prob = day_prob * len(self._day)
             Lam = (mu_no_zeros + sum_F)*hour_prob*day_prob
-        elif not time_weighted:
+            # We also don't want negative Lambda's
+            neg_indxs = Lam < 0            # find indices of values below 0
+            Lam[neg_indxs] = 0             # set negative values to 0
+
+        elif not for_event_numbers:
             # This is for calculating model parameters without factoring trends in. 
             Lam = mu + sum_F
         else:
@@ -185,7 +191,7 @@ class PointProcessTrain:
                 curr_day = self._data.DATE_TIME[i].weekday()
                 curr_hour = self.get_hour_vec_indx(self._data.DATE_TIME[i])
 
-                self._Lam_for_hotspots[indx] = self.get_intensity(self._mu, self._F, self._hour[curr_hour], self._day[curr_day], time_weighted = True)
+                self._Lam_for_hotspots[indx] = self.get_intensity(self._mu, self._F, self._hour[curr_hour], self._day[curr_day], for_event_numbers = True)
 
             # local update: 
             self._F, self._mu, self._theta, self._Gtimes = self.local_update(self._Gtimes, self._data.DATE_TIME[i],
@@ -203,14 +209,14 @@ class PointProcessTrain:
                     print(str(i/self._data_length*100) + " percent trained")
 
             
-        self._Lam = self.get_intensity(self._mu, self._F, self._hour[curr_hour], self._day[curr_day], time_weighted = True)
+        self._Lam = self.get_intensity(self._mu, self._F, self._hour[curr_hour], self._day[curr_day],  for_event_numbers = True)
                 
         self.save_params(save_tracked_params = True)
 
     def save_params(self, save_tracked_params = False):
 
         np.savez(self._save_out, Lam = self._Lam, theta = self._theta, w = self._w, 
-            F = self._F, mu = self._mu, day_prob = self._day, hour_prob = self._hour,
+            F = self._F, mu = self._mu, day_prob = self._day, hour_prob = self._hour, 
             grid_times = self._Gtimes.values, time_scale = self._time_scale_label, 
             grid_info = [self._xsize, self._ysize, self._xmin, self._xmax, self._ymin, self._ymax],
             last_time = self._LastTime, pred_interval_hourly_subdivision = self._hour_subdivision, 
@@ -237,10 +243,11 @@ class PointProcessTrain:
         print(sum(self._hour))
         print("Day vector sum: ")
         print(sum(self._day))
-        print("\nDay vector: ")
-        print(self._day)
         print("\nHour vector: ")
         print(self._hour)
+        print(sum(self._day))
+        print("\nDay vector: ")
+        print(self._day)
 
     def model_hotspot_examine(self, num_points, num_hotspots = 10):
         # examine how top model cells compare to actual top cells over data used for training
@@ -376,7 +383,7 @@ class PointProcessRun(PointProcessTrain):
 
             # global update
             self._LastTime, self._day, self._hour, self._F = self.global_update(update_data.DATE_TIME[i],
-                self._LastTime, self._day, self._hour, self._F) 
+                self._LastTime, self._day, self._hour,  self._F) 
 
             # local update: 
             self._F, self._mu, self._theta, self._Gtimes = self.local_update(self._Gtimes, update_data.DATE_TIME[i],
@@ -401,7 +408,7 @@ class PointProcessRun(PointProcessTrain):
             F = self._F*np.exp(-1*self._w*time_delta)
         else:
             F = self._F
-        pred_Lam = self.get_intensity(self._mu, F, self._hour[future_hour], self._day[future_day], time_weighted = True)
+        pred_Lam = self.get_intensity(self._mu, F, self._hour[future_hour], self._day[future_day], for_event_numbers = True)
 
         return pred_Lam
 
