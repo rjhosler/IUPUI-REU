@@ -427,12 +427,14 @@ class PointProcessRun(PointProcessTrain):
         time_limit = num_periods*time_increment*self._time_scale
         print("Events will be projected until " + str(time_limit) + " "+ str(self._time_scale_label)+ " from now")
         
+        percentile_sum_F_50 = np.percentile(np.sum(self._F, axis = 2),50)
+
         for i in range(0, num_iterations):
             last_time = self._LastTime
             indx=0   # for tracking where are in simulated event times
             F = np.copy(self._F)
 
-            events = np.empty(3)
+            events = np.empty([1,3])
             for x in range(0, self._xsize):
                 for y in range(0, self._ysize):
                     if self._mu[x][y] > 0:
@@ -442,22 +444,24 @@ class PointProcessRun(PointProcessTrain):
                             events = np.vstack((events, local))
             # events has format of: xgrid, ygrid, time multiplier
             events = events[1:]
-            events = events[events[:,2].argsort()]
+            if len(events) > 1:
+                events = events[events[:,2].argsort()]
+                last_time = start_time + datetime.timedelta(days=events[0][2])
 
             for j in range(0, num_periods):
                 future_time = start_time + datetime.timedelta(seconds = time_increment*j)
                 times.append(future_time)
                 # if there are more event times to examine and the future time happens after the last used event time:
-                if indx < len(events) and future_time < last_time + datetime.timedelta(days=events[indx][2]):
-                    last_time = last_time + datetime.timedelta(days=events[indx][2])
+                if indx < len(events) and future_time < last_time:
+                    last_time = start_time + datetime.timedelta(days=events[indx][2])
                     x = int(events[indx][0])
                     y = int(events[indx][1])
                     indx += 1
+                    
                     F[x][y] = F[x][y] + self._w*self._theta
-
                 intensity_predictions[i][j] = self.calculate_future_intensity(last_time, future_time, F)
 
-        intensity_predictions = sum(intensity_predictions) * 1 / num_iterations
+        intensity_predictions = sum(intensity_predictions) / num_iterations
 
         return intensity_predictions, array(times), time_increment
 
