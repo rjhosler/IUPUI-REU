@@ -33,7 +33,7 @@ class PointProcessTrain:
         self._w = array(w)
         self._K = len(w)
         self._mu = np.ones([self._xsize, self._ysize])*0  # initialize later, if called
-        self._F = np.ones([self._xsize, self._ysize, self._K])*.01
+        self._F = np.ones([self._xsize, self._ysize, self._K])*0    # doesn't seem to need initialization
         self._Lam = np.ones([self._xsize, self._ysize])*0.00001
         self._theta = np.ones([self._K])*.1
         self._Gtimes = pd.DataFrame(np.zeros([xgridsize, ygridsize]))
@@ -101,11 +101,11 @@ class PointProcessTrain:
 
         # update periodic trends
 
-        dt_day = .0001
+        dt_day = .000000005
         day_prob = (1-dt_day)*day_prob
         day_prob[curr_day] += dt_day
 
-        dt_hour = .0005
+        dt_hour = .005
         hour_prob = (1-dt_hour)*hour_prob
         hour_prob[curr_hour] += dt_hour
 
@@ -118,14 +118,14 @@ class PointProcessTrain:
 
         # Mu initialized if it neeeds to be!!
         if mu[gx][gy] == 0.0000000000:
-            mu[gx][gy] = .1
+            mu[gx][gy] = .25
 
         # find day and hour
         curr_day = event_time.weekday()
         curr_hour = self.get_hour_vec_indx(event_time)
 
         # local update based on where event occurred
-        dt = 0.008
+        dt = 0.005
         g_time_delta = (event_time - Gtimes.at[gx,gy]).total_seconds()*self._time_scale
         Gtimes.at[gx,gy] = event_time
 
@@ -184,14 +184,17 @@ class PointProcessTrain:
 
             # start keeping track of intensities near the end to evaluate model performance:
             diff = self._data_length - i
+
             if diff <= self._lam_memory:
-
                 indx = abs(diff - self._lam_memory)
-
                 curr_day = self._data.DATE_TIME[i].weekday()
                 curr_hour = self.get_hour_vec_indx(self._data.DATE_TIME[i])
 
                 self._Lam_for_hotspots[indx] = self.get_intensity(self._mu, self._F, self._hour[curr_hour], self._day[curr_day], for_event_numbers = True)
+
+            # on the last time through get a param lambda value for good measure
+            if i == self._data_length - 1:
+                self._Lam = self.get_intensity(self._mu, self._F, self._hour[curr_hour], self._day[curr_day],  for_event_numbers = True)
 
             # local update: 
             self._F, self._mu, self._theta, self._Gtimes = self.local_update(self._Gtimes, self._data.DATE_TIME[i],
@@ -207,9 +210,6 @@ class PointProcessTrain:
 
                 if progress_bar:
                     print(str(i/self._data_length*100) + " percent trained")
-
-            
-        self._Lam = self.get_intensity(self._mu, self._F, self._hour[curr_hour], self._day[curr_day],  for_event_numbers = True)
                 
         self.save_params(save_tracked_params = True)
 
@@ -232,22 +232,27 @@ class PointProcessTrain:
         plt.legend()
         plt.show()
 
-        mu_sum = np.zeros(len(self._mu_track))
-        for i in range(0, len(mu_sum)):
-            mu_sum[i] = sum(sum(self._mu_track[i]))
-        plt.plot(mu_sum[1:])
-        plt.title("sum of all background rates")
+        mu = np.copy(self._mu)
+        indx = mu < 0
+        mu[indx]= 0
+
+        print("\nSum of background rates w/o negative values: " + str(sum(sum(mu))))
+
+        all_sum = np.zeros(len(self._mu_track))
+        for i in range(0, len(all_sum)):
+            all_sum[i] = sum(sum(self._mu_track[i]))+sum(sum(sum(self._F_track[i])))
+        plt.plot(all_sum[1:])
+        plt.title("sum of all background rates & triggering funcions")
         plt.show()
 
         print("Hour vector sum: ")
         print(sum(self._hour))
+        plt.plot(self._hour, 'b.-')
+        plt.show()
         print("Day vector sum: ")
         print(sum(self._day))
-        print("\nHour vector: ")
-        print(self._hour)
-        print(sum(self._day))
-        print("\nDay vector: ")
-        print(self._day)
+        plt.plot(self._day, 'b.-')
+        plt.show()
 
     def model_hotspot_examine(self, num_points, num_hotspots = 10):
         # examine how top model cells compare to actual top cells over data used for training
@@ -268,6 +273,14 @@ class PointProcessTrain:
         print("\nLocation and value of largest and smallest (final) background rate: ")
         print(np.amax(self._mu), unravel_index(self._mu.argmax(), self._mu.shape),
             np.amin(self._mu), unravel_index(self._mu.argmin(), self._mu.shape))
+
+        print("\nLocation and value of largest and smallest (final) triggering function sum: ")
+        print(np.amax(self._F), unravel_index(self._F.argmax(), self._F.shape),
+            np.amin(self._F), unravel_index(self._F.argmin(), self._F.shape))
+
+        print("\nLocation and value of largest and smallest (final) intensities: ")
+        print(np.amax(self._Lam), unravel_index(self._Lam.argmax(), self._Lam.shape),
+            np.amin(self._Lam), unravel_index(self._Lam.argmin(), self._Lam.shape))
 
         tot_events = np.zeros([self._xsize, self._ysize])
         for i in range(start, end):
@@ -396,21 +409,67 @@ class PointProcessRun(PointProcessTrain):
         
         return msg
 
-    def calculate_future_intensity(self, future_time, decay = False):  
+    def calculate_future_intensity(self, last_time, future_time, F, decay = True):  
         # calls get_intensity to get each indivicual value of Lamba
 
-        time_delta = (future_time - self._LastTime).total_seconds()*self._time_scale
+        time_delta = (future_time - last_time).total_seconds()*self._time_scale
 
         future_hour = self.get_hour_vec_indx(future_time) 
         future_day =  future_time.weekday()
 
         if decay:
-            F = self._F*np.exp(-1*self._w*time_delta)
-        else:
-            F = self._F
+            F = F*np.exp(-1*self._w*time_delta)
         pred_Lam = self.get_intensity(self._mu, F, self._hour[future_hour], self._day[future_day], for_event_numbers = True)
 
         return pred_Lam
+
+    def get_future_events_with_simulation(self, start_time, num_periods, top_percent, num_iterations = 20):
+
+        intensity_predictions = np.zeros([num_iterations, num_periods, self._xsize, self._ysize])
+        times = []
+        time_increment = self.get_time_increment()
+        time_limit = num_periods*time_increment*self._time_scale
+        print("Events will be projected until " + str(time_limit) + " "+ str(self._time_scale_label)+ " from now")
+        percentile_sum_F_50 = np.percentile(np.sum(self._F, axis = 2),50)
+
+        for i in range(0, num_iterations):
+            last_time = self._LastTime
+            indx=0   # for tracking where are in simulated event times
+            F = np.copy(self._F)
+            update_f = False
+
+            events = np.empty([1,3])
+            for x in range(0, self._xsize):
+                for y in range(0, self._ysize):
+                    if self._mu[x][y] > 0:
+                        local_events = self.ESTProcess(self._mu[x][y], self._theta, self._w, time_limit)
+                        for l in range(0, len(local_events)):
+                            local = array([x, y, local_events[l]])
+                            events = np.vstack((events, local))
+            # events has format of: xgrid, ygrid, time multiplier
+            events = events[1:]
+            if len(events) > 0:
+                events = events[events[:,2].argsort()]
+                next_event_time = start_time + datetime.timedelta(days=events[indx][2])
+
+            for j in range(0, num_periods):
+                future_time = start_time + datetime.timedelta(seconds = time_increment*j)
+                times.append(future_time)
+                # if there are more event times to examine and the future time happens after the last used event time:
+                if indx < len(events) and future_time > next_event_time:
+                    update_f = True
+                    last_time = next_event_time
+                    x = int(events[indx][0])
+                    y = int(events[indx][1])
+                    indx += 1                    
+                intensity_predictions[i][j] = self.calculate_future_intensity(last_time, future_time, F)
+                if update_f:
+                    F[x][y] = F[x][y] + self._w*self._theta
+                    update_f = False
+
+        intensity_predictions = sum(intensity_predictions) / num_iterations
+
+        return intensity_predictions, array(times), time_increment
 
     def get_future_events(self, start_time, num_periods, top_percent):
         # calls calculate_future_intensity to find intensity matrix @ each ti,me interval. Returns matrix format, times array and format of [xcoord, ycoord, intensity]
@@ -428,7 +487,7 @@ class PointProcessRun(PointProcessTrain):
         for i in range(0, num_periods):
             future_time = start_time + datetime.timedelta(seconds = time_increment*i)
             times.append(future_time)
-            intensity = self.calculate_future_intensity(future_time) 
+            intensity = self.calculate_future_intensity(self._LastTime, future_time, self._F) 
 
             if top_percent:
                 threshold = np.percentile(intensity, top_percent)
@@ -454,18 +513,22 @@ class PointProcessRun(PointProcessTrain):
     def get_time_increment(self):
         return (1 / self._hour_subdivision)/self._time_scaling_lookup['hours'] 
 
-    def test_projection(self, test_points, num_hotspots = 10, top_percent = 0):
+    def test_projection(self, test_points, num_hotspots = 10, top_percent = 0, use_simulation = True, num_simulation_iters = 20):
         # test points is a data frame with labels DATE_TIME (datetime format), XCOORD, YCOORD
         time_period = (test_points.DATE_TIME[len(test_points)-1] - test_points.DATE_TIME[0]).total_seconds()
 
         time_increment = self.get_time_increment() 
 
         # get everything in seconds to find number of periods to model
-        num_periods = ceil(time_period/time_increment)                                              # number of predictions to run at time_increment value each
+        num_periods = ceil(time_period/time_increment)  # number of predictions to run at time_increment value each
 
         print("\nPredicting over time of " + str(time_period*self._time_scale) + " " + str(self._time_scale_label) + ". Generating " + str(num_periods) + " intensity prediction(s)")
 
-        intensity_predictions, time_increments, time_increment_unit = self.get_future_events(test_points.DATE_TIME[0], num_periods, top_percent)
+        if not use_simulation:
+            intensity_predictions, time_increments, time_increment_unit = self.get_future_events(test_points.DATE_TIME[0], num_periods, top_percent)
+
+        else:
+            intensity_predictions, time_increments, time_increment_unit = self.get_future_events_with_simulation(test_points.DATE_TIME[0], num_periods, top_percent, num_simulation_iters)
 
         # sum to get prediction over total time of test_points
         pred_num_events = sum(intensity_predictions[:,:])
@@ -528,7 +591,6 @@ class PointProcessRun(PointProcessTrain):
             x = pred_locs[i][0]
             y = pred_locs[i][1]
             hit_num = hit_num + tot_events[x][y]
-        print(hit_num)
         n_frac = hit_num/tot
         a_frac = len(pred_locs)/(tot_pred.shape[0]*tot_pred.shape[1])
         
@@ -561,43 +623,26 @@ class PointProcessRun(PointProcessTrain):
 
         if list_format != 'np':
             x_y_lam = x_y_lam.tolist()
-        return x_y_lam
-
-    '''
-    #WIP
-    def simulate_events(self, start_time, max_time):
-        pass
-
-    def ESTProcess(mu, k0, w, T):
-        p = pois(mu*T)
-        times = np.random.uniform(0, T, p) #(low, high, size)
-        counts = 0
-        countf = p-1
-
-        while(countf>=counts):
-            p=pois(k0)    #each event generates p offspring according to a Poisson r.v. with parameter k0
-            for j in range(0, p):
-                temp=times[counts]-np.log(np.random.rand())/w    
-                if(temp < T):    
-                    times = np.append(times, temp)
-                    countf=countf+1
-            counts=counts+1
-
-        times = times[0:countf]      
-        return times
-
-    def pois(self, S):
-        if S <= 100:
-            temp = -1*S
-            L = exp(temp)
-            k = 0
-            p = 1
-            while p > L:
-                k = k + 1
-                p = p * random()
-            p = k - 1
-        else:
-            p = floor(S + sqrt(S) * random())
-        return int(p)
-    '''    
+    def ESTProcess(self, mu, theta, w, T):
+        # mu units: #/day, k0 units: #/day, w units: #/day
+        full_times = np.empty(1)
+        for i in range(0,self._K):
+            # base number of events
+            p = np.random.poisson(mu*T) 
+            times = np.random.uniform(0, T, p) #(low, high, size)
+            counts = 0
+            countf = p-1   
+            while(countf>=counts):
+                p=np.random.poisson(theta[i])    #each event generates p offspring according to a Poisson r.v. with parameter theta
+                for j in range(0, p):
+                    temp=times[counts]-np.log(np.random.rand())/w[i]
+                    if(temp < T):    
+                        times = np.append(times, temp)
+                        countf=countf+1
+                counts=counts+1
+            times = times[:countf]
+            full_times = np.append(full_times, times)
+        full_times = full_times[1:]
+        return full_times             
+       
 
