@@ -10,7 +10,7 @@ We have developed a clustering and prediction method that forms the back end of 
     * Sklearn
     * Pandas
     * Haversine
-    * Simplejson, urllib, urllib.request, json, bson, bson_util, pymongo
+    * Simplejson, pymongo
     * Flask
 * Clone to your local repository
 
