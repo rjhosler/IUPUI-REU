@@ -75,11 +75,13 @@ def emergencies():
 
 @app.route('/SingleProcessUpdate')
 def SingleProcessUpdate():
-    #http://127.0.0.1:5000/SingleProcessUpdate?xcoord=1530798259&ycoord=0
-    #info should have form of: xcoord, ycoord, datetime str '%Y-%m-%d %H:%M:%S', bool 
-    #if bool == True, the new parameters will be saved out to npz file
-    #inputs = pandas data frame with correct labels
-    #msg = PointProcess.update_from_new_inputs(inputs)
+    '''
+    http://127.0.0.1:5000/SingleProcessUpdate?xcoord=1530798259&ycoord=0
+    info should have form of: xcoord, ycoord, datetime str '%Y-%m-%d %H:%M:%S', bool 
+    if bool == True, the new parameters will be saved out to npz file
+    inputs = pandas data frame with correct labels
+    msg = PointProcess.update_from_new_inputs(inputs)
+    '''
     xcoord = [float(request.args.get('xcoord'))]
     ycoord = [float(request.args.get('ycoord'))]
     datetime = [request.args.get('datetime')]
@@ -181,7 +183,8 @@ def wasserstein_cluster (trucks, interval_time, interval_count, start_time):
         cluster.remove_points (still_data [:,0:2])
 
     start = time.time()
-    lam = cluster.learn_lam(5, False)
+    lam = cluster.learn_lam(6, False)
+    cluster.round_off()
     end = time.time()
     print(end - start, "seconds")
     data = grid_loc
@@ -190,8 +193,8 @@ def wasserstein_cluster (trucks, interval_time, interval_count, start_time):
     #Wasserstein
     centers = cluster.get_centers()
     dist = cluster.get_dist()
-    print (dist)
 
+    #things for fancy plots
     heatmap, xedges, yedges = np.histogram2d(data[:,1], data[:,0], bins = bincount)
     extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
 
@@ -204,27 +207,7 @@ def wasserstein_cluster (trucks, interval_time, interval_count, start_time):
     plt.savefig ('wasserstein_graph.png', bbox_inches='tight')
     plt.show()
     plt.close()
-
-    final = centers
-
-    #Wasserstein + roundoff
-    cluster.round_off()
-    centers = cluster.get_centers()
-    dist = cluster.get_dist()
-    print (dist)
-
-    heatmap, xedges, yedges = np.histogram2d(data[:,1], data[:,0], bins = bincount)
-    extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
-
-    plt.clf()
-    plt.title ('Wasserstein + Round Off')
-    plt.imshow(heatmap.T, extent=extent, origin='lower')
-    plt.scatter(centers[:,1], centers[:,0], c = 'red', s = 100, alpha = 0.5)
-    if (still_data.size > 0):
-        plt.scatter(still_data[:,1], still_data[:,0], c = 'green', s = 100, alpha = 0.5)
-    plt.show()
     
-    centers = final
     centers = close_assignment (centers, move_data)    
     return centers
 
