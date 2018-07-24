@@ -99,11 +99,11 @@ class PointProcessTrain:
         last_event_time = event_time
 
         # update periodic trends
-        dt_day = .0001
+        dt_day = .00015
         day_prob = (1-dt_day)*day_prob
         day_prob[curr_day] += dt_day
 
-        dt_hour = .0005
+        dt_hour = .0003
         hour_prob = (1-dt_hour)*hour_prob
         hour_prob[curr_hour] += dt_hour
 
@@ -220,7 +220,7 @@ class PointProcessTrain:
             np.savez(self._track_out, Lam_track = self._Lam_track, mu_track = self._mu_track, F_track = self._F_track, theta_track = self._theta_track, las_Lams = self._Lam_for_hotspots)
 
     def param_examine(self):
-       for i in range(0, self._K):
+        for i in range(0, self._K):
             plt.plot(np.transpose(self._theta_track)[i][1:], label="w = " + str(self._w[i]))
         plt.title("data points vs. theta")
         plt.legend()
@@ -395,7 +395,7 @@ class PointProcessRun(PointProcessTrain):
         
         return msg
 
-    def calculate_future_intensity(self, last_time, future_time, F, decay = True):  
+    def calculate_future_intensity(self, last_time, future_time, F, decay):  
         # calls get_intensity to get each indivicual value of Lamba
 
         time_delta = (future_time - last_time).total_seconds()*self._time_scale
@@ -411,7 +411,7 @@ class PointProcessRun(PointProcessTrain):
 
         return pred_Lam
 
-    def get_future_events(self, start_time, num_periods, top_percent):
+    def get_future_events(self, start_time, num_periods, top_percent, decay=False):
         # calls calculate_future_intensity to find intensity matrix @ each ti,me interval. Returns matrix format, times array and format of [xcoord, ycoord, intensity]
         # top_percent is lowest percentile to keep in the data set
         times = []
@@ -427,7 +427,7 @@ class PointProcessRun(PointProcessTrain):
         for i in range(0, num_periods):
             future_time = start_time + datetime.timedelta(seconds = time_increment*i)
             times.append(future_time)
-            intensity = self.calculate_future_intensity(self._LastTime, future_time, self._F) 
+            intensity = self.calculate_future_intensity(self._LastTime, future_time, self._F, decay) 
 
             if top_percent:
                 threshold = np.percentile(intensity, top_percent)
@@ -458,7 +458,7 @@ class PointProcessRun(PointProcessTrain):
             for x in range(0, self._xsize):
                 for y in range(0, self._ysize):
                     if self._mu[x][y] > 0:
-                        local_events = self.ESTProcess(self._mu[x][y], self._theta, self._w, np.amax(1/self._w))   # come back to this!
+                        local_events = self.ESTProcess(self._mu[x][y], self._theta, self._w, 30)   # come back to this!
                         for l in range(0, len(local_events)):
                             local = array([x, y, local_events[l]])
                             events = np.vstack((events, local))
@@ -479,7 +479,8 @@ class PointProcessRun(PointProcessTrain):
                 curr_y = int(events[indx][1])
 
                 if curr_synthetic_time > future_time:
-                    intensity_predictions[i][future_incr] = self.calculate_future_intensity(last_synthetic_time, future_time, F)
+                    print("Future time: "+str(future_time)+" , Synthetic time: "+str(last_synthetic_time))
+                    intensity_predictions[i][future_incr] = self.calculate_future_intensity(last_synthetic_time, future_time, F, decay=True)
                     future_incr+=1
                     if future_incr == num_periods:
                         break
