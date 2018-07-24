@@ -47,7 +47,7 @@ def emergencies():
     start_time =  datetime.datetime.fromtimestamp(float(start_time))
     total_output = []
 
-    predictions, times, increment = PointProcess.get_events_for_api(start_time, interval_count, top_percent = 0)
+    predictions, times, increment = PointProcess.get_events_for_api(start_time, interval_count, time_interval, top_percent = 0)
     
     for j in range (int(interval_count)):            
         output = {
@@ -77,8 +77,7 @@ def emergencies():
 def SingleProcessUpdate():
     '''
     http://127.0.0.1:5000/SingleProcessUpdate?xcoord=1530798259&ycoord=0
-    info should have form of: xcoord, ycoord, datetime str '%Y-%m-%d %H:%M:%S', bool 
-    if bool == True, the new parameters will be saved out to npz file
+    info should have form of: xcoord, ycoord, datetime str '%Y-%m-%d %H:%M:%S'
     inputs = pandas data frame with correct labels
     msg = PointProcess.update_from_new_inputs(inputs)
     '''
@@ -95,6 +94,7 @@ def SingleProcessUpdate():
 @app.route('/ProcessUpdate/<name>')
 def ProcessUpdate(name):
     msg = PointProcess.update_from_new_inputs(name)
+
     return msg
 
 @app.route('/login', methods = ['POST', 'GET'])
