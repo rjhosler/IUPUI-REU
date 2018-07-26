@@ -30,7 +30,7 @@ import time
 from flask import Flask, redirect, url_for, request, jsonify     
 application = Flask(__name__)
 
-PointProcess = PointProcessRun(param_location = 'Trained_Params_100_100.npz')
+PointProcess = PointProcessRun(param_location = 'Trained_Params_.npz')
 
 @application.route('/emergencies')
 def emergencies():
