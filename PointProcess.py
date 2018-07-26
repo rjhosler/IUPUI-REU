@@ -483,6 +483,7 @@ class PointProcessRun(PointProcessTrain):
                 time_multiplier = time_increment*t
                 multiplier_in_days = time_multiplier * 1.15741e-5
                 future_time = future_time = start_time + datetime.timedelta(seconds = time_multiplier)
+                times.append(future_time)
                 still_in_future_index = np.argmax(events[:,2]>multiplier_in_days)
                 
                 for n in range(last_events_index, still_in_future_index):
