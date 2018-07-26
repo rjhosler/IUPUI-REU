@@ -3,16 +3,27 @@ We have developed a clustering and prediction method that forms the back end of 
 
 ### Instillation
 * Requirements
-    * Python 3
-    * Matplotlib
-    * Numpy
-    * Scipy
-    * Sklearn
-    * Pandas
-    * Haversine
-    * Simplejson
-    * Pymongo
-    * Flask
+   * click==6.7
+   * cycler==0.10.0
+   * Flask==1.0.2
+   * haversine==0.4.5
+   * itsdangerous==0.24
+   * Jinja2==2.10
+   * kiwisolver==1.0.1
+   * MarkupSafe==1.0
+   * matplotlib==2.2.2
+   * numpy==1.15.0
+   * pandas==0.23.3
+   * pymongo==3.7.1
+   * pyparsing==2.2.0
+   * python-dateutil==2.7.3
+   * pytz==2018.5
+   * scikit-learn==0.19.2
+   * scipy==1.1.0
+   * simplejson==3.16.0
+   * six==1.11.0
+   * sklearn==0.0
+   * Werkzeug==0.14.1
 * Clone to your local repository
 
 ### Usage
