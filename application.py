@@ -75,9 +75,8 @@ def emergencies():
 @application.route('/SingleProcessUpdate')
 def SingleProcessUpdate():
     '''
-    http://127.0.0.1:5000/SingleProcessUpdate?xcoord=1530798259&ycoord=0
-    info should have form of: xcoord, ycoord, datetime str '%Y-%m-%d %H:%M:%S', bool 
-    if bool == True, the new parameters will be saved out to npz file
+    http://127.0.0.1:5000/SingleProcessUpdate?xcoord=1530798259&ycoord=3&datetime=2019-12-28 04:48:53
+    info should have form of: xcoord, ycoord, datetime str '%Y-%m-%d %H:%M:%S'
     inputs = pandas data frame with correct labels
     msg = PointProcess.update_from_new_inputs(inputs)
     '''
@@ -93,7 +92,12 @@ def SingleProcessUpdate():
 
 @application.route('/ProcessUpdate/<name>')
 def ProcessUpdate(name):
+    fields = ['XCOORD', 'YCOORD', 'CALL_TYPE_FINAL_D', 'CALL_TYPE_FINAL', 'DATE_TIME']
+    name = pd.read_csv(name, usecols=fields)
+    name['DATE_TIME'] =  pd.to_datetime(name['DATE_TIME'], format='%Y-%m-%d %H:%M:%S')
+    name = name.sort_values(by='DATE_TIME')
     msg = PointProcess.update_from_new_inputs(name)
+
     return msg
 
 @application.route('/login', methods = ['POST', 'GET'])
