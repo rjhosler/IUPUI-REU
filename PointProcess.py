@@ -221,8 +221,8 @@ class PointProcessTrain:
         # had to remove calls to matplotlib for api to run
         print("Look at theta: ")
         print("for i in range(0, self._K):" + 
-            "\nplt.plot(np.transpose(self._theta_track)[i][1:], label="w = " + str(self._w[i]))" + 
-        "\nplt.title("data points vs. theta")"
+            "\nplt.plot(np.transpose(self._theta_track)[i][1:], label='w = ' + str(self._w[i]))" + 
+        "\nplt.title('data points vs. theta')"
         "\nplt.legend()"
         "\nplt.show())")
 
@@ -235,7 +235,7 @@ class PointProcessTrain:
         "\nfor i in range(0, len(all_sum)):" + 
             "\nall_sum[i] = sum(sum(self._mu_track[i]))+sum(sum(sum(self._F_track[i])))" + 
         "\nplt.plot(all_sum[1:])" + 
-        "\nplt.title("sum of all background rates & triggering funcions")" +
+        "\nplt.title('sum of all background rates & triggering funcions')" +
         "\nplt.show()")
 
         print("Hour vector sum: ")
