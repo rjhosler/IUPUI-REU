@@ -621,7 +621,7 @@ class PointProcessRun(PointProcessTrain):
         return pai, n_frac, a_frac
 
     def locs_for_wasserstein(self, start_time, num_projections = 16, time_step = 15,  top_percent = 90):
-        predictions, times, time_increment_unit = self.get_future_events(start_time, num_projections, time_step, time_step,top_percent)
+        predictions, times, time_increment_unit = self.get_future_events(start_time, num_projections, time_step, top_percent)
         sum_predictions = sum(predictions[:,:])
         reshaped_sum = self.reshape_lam(sum_predictions, list_format = 'np') 
         return reshaped_sum
