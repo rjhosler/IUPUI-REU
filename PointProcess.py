@@ -533,8 +533,8 @@ class PointProcessRun(PointProcessTrain):
         for i in range(0, len(intensity_predictions)):
             reshaped_intensity_predictions.append(self.reshape_lam(intensity_predictions[i], list_format = 'list'))
 
-        return reshaped_intensity_predictions, times, time_increment
-
+        return reshaped_intensity_predictions, time_increments, time_increment_unit
+    
     def get_time_increment(self, time_step):
         baseline = (1/self._time_scaling_lookup['hours']) / self._hour_subdivision
         scale =  time_step * 60 / baseline
