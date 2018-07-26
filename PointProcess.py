@@ -8,8 +8,6 @@ import warnings
 from numpy import unravel_index
 from numpy import array
 import time
-import pylab as pl
-from IPython import display
 
 class PointProcessTrain:
     #training_points is a dataframe with labels: DATE_TIME (datetime format), XCOORD, YCOORD
@@ -220,33 +218,34 @@ class PointProcessTrain:
             np.savez(self._track_out, Lam_track = self._Lam_track, mu_track = self._mu_track, F_track = self._F_track, theta_track = self._theta_track, las_Lams = self._Lam_for_hotspots)
 
     def param_examine(self):
-        for i in range(0, self._K):
-            plt.plot(np.transpose(self._theta_track)[i][1:], label="w = " + str(self._w[i]))
-        plt.title("data points vs. theta")
-        plt.legend()
-        plt.show()
+        # had to remove calls to matplotlib for api to run
+        print("Look at theta: ")
+        print("for i in range(0, self._K):" + 
+            "\nplt.plot(np.transpose(self._theta_track)[i][1:], label="w = " + str(self._w[i]))" + 
+        "\nplt.title("data points vs. theta")"
+        "\nplt.legend()"
+        "\nplt.show())")
 
         mu = np.copy(self._mu)
         indx = mu < 0
         mu[indx]= 0
 
-        print("\nSum of background rates w/o negative values: " + str(sum(sum(mu))))
-
-        all_sum = np.zeros(len(self._mu_track))
-        for i in range(0, len(all_sum)):
-            all_sum[i] = sum(sum(self._mu_track[i]))+sum(sum(sum(self._F_track[i])))
-        plt.plot(all_sum[1:])
-        plt.title("sum of all background rates & triggering funcions")
-        plt.show()
+        print("Look at mu + F: ")
+        print("all_sum = np.zeros(len(self._mu_track))" + 
+        "\nfor i in range(0, len(all_sum)):" + 
+            "\nall_sum[i] = sum(sum(self._mu_track[i]))+sum(sum(sum(self._F_track[i])))" + 
+        "\nplt.plot(all_sum[1:])" + 
+        "\nplt.title("sum of all background rates & triggering funcions")" +
+        "\nplt.show()")
 
         print("Hour vector sum: ")
         print(sum(self._hour))
-        plt.plot(self._hour, 'b.-')
-        plt.show()
+        print("plt.plot(self._hour, 'b.-')" + 
+        "\nplt.show()")
         print("Day vector sum: ")
         print(sum(self._day))
-        plt.plot(self._day, 'b.-')
-        plt.show()
+        print("plt.plot(self._day, 'b.-')" + 
+        "\nplt.show()") 
 
     def model_hotspot_examine(self, num_points, num_hotspots = 10):
         # examine how top model cells compare to actual top cells over data used for training
@@ -337,7 +336,7 @@ class PointProcessRun(PointProcessTrain):
         if save_loc:
             self._save_out = save_loc
         else:
-            self._save_out = str(trained_params['save_loc'])
+            self._save_out = param_location
 
         self._time_scale_label = str(trained_params['time_scale'])
         self._time_scaling_lookup = {'days': 1.15741e-5, 'hours': 0.0002777784, '15minutes': 0.001111111, 'minutes': 0.016666704, 'seconds': 1}
@@ -395,8 +394,9 @@ class PointProcessRun(PointProcessTrain):
         
         return msg
 
-    def calculate_future_intensity(self, last_time, future_time, F):  
+    def calculate_future_intensity(self, last_time, future_time, F, decay=False):  
         # calls get_intensity to get each indivicual value of Lamba
+        # only use decay when triggering from synthetic process
 
         time_delta = (future_time - last_time).total_seconds()*self._time_scale
 
@@ -407,6 +407,13 @@ class PointProcessRun(PointProcessTrain):
             print(last_time)
             print(future_time)
             print("Future time is behind last time!!!!")
+
+        if decay and (future_time - last_time).total_seconds() < 0:
+            print("Cannot calculate with decay")
+
+        elif decay and (future_time - last_time).total_seconds() > 0:
+            F = F*np.exp(-1*self._w*(time_delta))
+
         pred_Lam = self.get_intensity(self._mu, F, self._hour[future_hour], self._day[future_day], time_weighted = True)
 
         return pred_Lam
@@ -439,14 +446,11 @@ class PointProcessRun(PointProcessTrain):
 
         return intensity_predictions, array(times), time_increment
 
-    def get_future_events_with_synthetic(self, start_time, num_periods, top_percent, num_iterations = 5):
-        pass
-        '''
-        CURRENTLY GETTING FIXED
+    def get_future_events_with_synthetic(self, start_time, num_periods, time_step, top_percent, num_iterations = 8):
 
         intensity_predictions = np.zeros([num_iterations, num_periods, self._xsize, self._ysize])
         times = []
-        time_increment = self.get_time_increment()
+        time_increment, scale = self.get_time_increment(time_step)
         time_limit = num_periods*time_increment*self._time_scale
         print("Events will be projected until " + str(time_limit) + " "+ str(self._time_scale_label)+ " from now")
         percentile_sum_F_50 = np.percentile(np.sum(self._F, axis = 2),50)
@@ -459,7 +463,7 @@ class PointProcessRun(PointProcessTrain):
             for x in range(0, self._xsize):
                 for y in range(0, self._ysize):
                     if self._mu[x][y] > 0:
-                        local_events = self.ESTProcess(self._mu[x][y], self._theta, self._w, 30)   # come back to this!
+                        local_events = self.ESTProcess(self._mu[x][y], self._theta, self._w, 100)   # come back to this!
                         for l in range(0, len(local_events)):
                             local = array([x, y, local_events[l]])
                             events = np.vstack((events, local))
@@ -471,69 +475,51 @@ class PointProcessRun(PointProcessTrain):
             if len(events) > 0:
                 events = events[events[:,2].argsort()]
 
-            # events only
-            events_datetime_only = np.transpose(events)[-1]
-            events_datetime_only = [start_time + datetime.timedelta(days=e) for e in events_datetime_only]
-            events_datetime_only = array(events_datetime_only)
-
             last_events_index = 0
 
+            # have to initialize somewhere why not here
+            sim_time = start_time
+            
             for t in range(0, num_periods):
-                future_time = future_time = start_time + datetime.timedelta(seconds = time_increment*t)
-                to_find_past_times = events_datetime_only - future_time
-                events_index = np.argmax(to_find_past_times>datetime.timedelta(days=0))
-
-                for n in range(last_events_index, events_index):
-                    x = events[n][0]
-                    y = events[n][1]
+                time_multiplier = time_increment*t
+                multiplier_in_days = time_multiplier * 1.15741e-5
+                future_time = future_time = start_time + datetime.timedelta(seconds = time_multiplier)
+                still_in_future_index = np.argmax(events[:,2]>multiplier_in_days)
+                
+                for n in range(last_events_index, still_in_future_index):
+                    x = int(events[n][0])
+                    y = int(events[n][1])
+                    sim_time = start_time + datetime.timedelta(days = events[n][2])
+                    last_sim_time = start_time + datetime.timedelta(days = events[n-1][2])
+                    if n == 0:
+                        last_sim_time = start_time
 
                     # decay F
-                    F = F*np.exp(-1*self._w*(curr_synthetic_time-last_synthetic_time))
+                    time_dt = (sim_time - last_sim_time).total_seconds()*self._time_scale
+                    F = F*np.exp(-1*self._w*(time_dt))
+                    # Update F
+                    F[x][y] = F[x][y] + self._w*self._theta 
+                
+                last_events_index = still_in_future_index     
 
+                # get intensity
+                intensity = self.calculate_future_intensity(sim_time, future_time, F, decay = True)
 
-            future_incr = 0   # increment of projection
-            curr_synthetic_time = self._LastTime  # have to start somewhere why not here
-            future_time = start_time
+                if top_percent:
+                    threshold = np.percentile(intensity, top_percent)
+                    intensity = intensity - threshold    # values below threshold become negative
+                    neg_indxs = intensity < 0            # find indices of values below 0
+                    intensity[neg_indxs] = 0             # set negative values to 0
 
-            for indx in range(0, len(events)):
-
-                last_synthetic_time = curr_synthetic_time
-                curr_synthetic_time = start_time + datetime.timedelta(days=events[indx][2])
-                curr_x = int(events[indx][0])
-                curr_y = int(events[indx][1])
-
-                # Decay F
-                F = F*np.exp(-1*self._w*(curr_synthetic_time-last_synthetic_time))
-
-                if curr_synthetic_time > future_time:
-                    print("Future time: "+str(future_time)+" , Synthetic time: "+str(last_synthetic_time))
-
-                    intensity = self.calculate_future_intensity(last_synthetic_time, future_time, F)
-
-                    if top_percent:
-                        threshold = np.percentile(intensity, top_percent)
-                        intensity = intensity - threshold    # values below threshold become negative
-                        neg_indxs = intensity < 0            # find indices of values below 0
-                        intensity[neg_indxs] = 0             # set negative values to 0
-
-                    intensity_predictions[i][future_incr] = intensity
-
-                    future_incr+=1
-                    if future_incr == num_periods:
-                        break
-
-                    future_time = start_time + datetime.timedelta(seconds = time_increment*future_incr)
-
-                # Update F
-                F[curr_x][curr_y] = F[curr_x][curr_y] + self._w*self._theta
-
-            print("Number of simulated events used: " + str(indx)+". Second Event Time: "+str(start_time + datetime.timedelta(days=events[0][2]))+" End: "+str(last_synthetic_time))
+                intensity_predictions[i][t] = intensity*scale
+                
+            print("Number of simulated events used: " + str(still_in_future_index-1)+". First Event Time: "
+                +str(start_time + datetime.timedelta(days = events[0][2]))+" End: "+str(start_time + datetime.timedelta(days = events[-1][2])))
             
         intensity_predictions = sum(intensity_predictions) / num_iterations
 
         return intensity_predictions, array(times), time_increment
-        '''
-
+    
     def get_events_for_api(self, start_time, num_periods, time_step=15, top_percent = 0):
         # formats future predictions for the api
         intensity_predictions, times, time_increment = self.get_future_events(start_time, num_periods, time_step, top_percent)
@@ -561,8 +547,7 @@ class PointProcessRun(PointProcessTrain):
         print("\nPredicting over time of " + str(time_period*self._time_scale) + " " + str(self._time_scale_label) + ". Generating " + str(num_periods) + " intensity prediction(s)")
 
         if use_synthetic:
-            print("that's currently getting fixed")
-            #intensity_predictions, time_increments, time_increment_unit = self.get_future_events_with_synthetic(test_points.DATE_TIME[0], num_periods, top_percent)
+            intensity_predictions, time_increments, time_increment_unit = self.get_future_events_with_synthetic(test_points.DATE_TIME[0], num_periods, time_step, top_percent)
 
         else:
             intensity_predictions, time_increments, time_increment_unit = self.get_future_events(test_points.DATE_TIME[0], num_periods, time_step, top_percent)
