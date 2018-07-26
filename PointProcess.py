@@ -519,9 +519,14 @@ class PointProcessRun(PointProcessTrain):
 
         return intensity_predictions, array(times), time_increment
     
-    def get_events_for_api(self, start_time, num_periods, time_step=15, top_percent = 0):
+    def get_events_for_api(self, start_time, num_periods, time_step=15, top_percent = 0, use_synthetic = False):
         # formats future predictions for the api
-        intensity_predictions, times, time_increment = self.get_future_events(start_time, num_periods, time_step, top_percent)
+
+        if use_synthetic:
+            intensity_predictions, time_increments, time_increment_unit = self.get_future_events_with_synthetic(start_time, num_periods, time_step, top_percent)
+
+        else:
+            intensity_predictions, time_increments, time_increment_unit = self.get_future_events(start_time, num_periods, time_step, top_percent)
 
         reshaped_intensity_predictions = []
 
@@ -619,8 +624,14 @@ class PointProcessRun(PointProcessTrain):
 
         return pai, n_frac, a_frac
 
-    def locs_for_wasserstein(self, start_time, num_projections = 16, time_step = 15,  top_percent = 90):
-        predictions, times, time_increment_unit = self.get_future_events(start_time, num_projections, time_step, top_percent)
+    def locs_for_wasserstein(self, start_time, num_projections = 16, time_step = 15, use_synthetic=False, top_percent = 90):
+
+        if use_synthetic:
+            predictions, time_increments, time_increment_unit = self.get_future_events_with_synthetic(start_time, num_projections, time_step, top_percent)
+
+        else:
+            predictions, time_increments, time_increment_unit = self.get_future_events(start_time, num_projections, time_step, top_percent)
+
         sum_predictions = sum(predictions[:,:])
         reshaped_sum = self.reshape_lam(sum_predictions, list_format = 'np') 
         return reshaped_sum
