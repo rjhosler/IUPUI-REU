@@ -1,9 +1,8 @@
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.cluster import KMeans
 import pandas as pd
 import io
-import matplotlib.pylab as pl
 from scipy import linalg as la
 from numpy.linalg import inv
 import math
@@ -211,9 +210,8 @@ class Cluster:
                 prev_lam = lam
                 lam += np.random.randint(low = low, high = high)
             prev_dist = dist
-            if (rand_centers == False):
+            if (rand_centers == False and i % 2 == 0):
                 self._centers = self._oldcenters
-                #self._centers = self._centers
             else:
                 self.randomize_centers()
 
@@ -232,12 +230,12 @@ class Cluster:
             print ('oof. try again')
             time.sleep(1)
             self.driving_distance(coord1, coord2)            
-        driving_time = result['rows'][0]['elements'][0]['distance']['value']
-        print (driving_time)
-        return float(driving_time)
+        driving_time = result['rows'][0]['elements'][0]['distance']['value'] / 1000
+        return driving_time
 
     #driver method for kmeans
     def process_data_kmeans (self, init):
+        self._data = self.cluster_assignment()
         if (init == True):
             self.kmeans_cluster (True)
         else:
