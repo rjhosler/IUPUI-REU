@@ -41,7 +41,7 @@ class PointProcessTrain:
         self._track_out = param_track_save_loc
 
         self._track_granularity = track_granularity
-        memory_length = floor(self._data_length/self._track_granularity)
+        memory_length = ceil(self._data_length/self._track_granularity)
 
         self._mu_track = np.ones([memory_length, self._xsize, self._ysize])
         self._Lam_track = np.ones([memory_length, self._xsize, self._ysize])
@@ -96,7 +96,7 @@ class PointProcessTrain:
         last_event_time = event_time
 
         # update periodic trends
-        dt_day = .00015
+        dt_day = .000015
         day_prob = (1-dt_day)*day_prob
         day_prob[curr_day] += dt_day
 
@@ -113,14 +113,14 @@ class PointProcessTrain:
 
         # Mu initialized if it neeeds to be!!
         if mu[gx][gy] == 0.0000000000:
-            mu[gx][gy] = .08
+            mu[gx][gy] = .01
 
         # find day and hour
         curr_day = event_time.weekday()
         curr_hour = self.get_hour_vec_indx(event_time)
 
         # local update based on where event occurred
-        dt = 0.0025
+        dt = 0.00025
         g_time_delta = (event_time - Gtimes.at[gx,gy]).total_seconds()*self._time_scale
         Gtimes.at[gx,gy] = event_time
 
@@ -223,7 +223,7 @@ class PointProcessTrain:
             "\nplt.plot(np.transpose(self._theta_track)[i][1:], label='w = ' + str(self._w[i]))" + 
         "\nplt.title('data points vs. theta')"
         "\nplt.legend()"
-        "\nplt.show())")
+        "\nplt.show()")
 
         mu = np.copy(self._mu)
         indx = mu < 0
@@ -535,7 +535,7 @@ class PointProcessRun(PointProcessTrain):
             reshaped_intensity_predictions.append(self.reshape_lam(intensity_predictions[i], list_format = 'list'))
 
         return reshaped_intensity_predictions, time_increments, time_increment_unit
-    
+
     def get_time_increment(self, time_step):
         baseline = (1/self._time_scaling_lookup['hours']) / self._hour_subdivision
         scale =  time_step * 60 / baseline
