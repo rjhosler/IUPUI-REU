@@ -64,10 +64,6 @@ def emergencies():
             })
         total_output.append (output)
         print (len(output['emergencies']))
-        
-    filePathNameWExt = 'emergencies.json'
-    with open(filePathNameWExt, 'w') as fp:
-        json.dump(total_output, fp, default=json_util.default)
 
     return jsonify(total_output)
 
