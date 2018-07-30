@@ -71,16 +71,14 @@ def emergencies():
 @application.route('/SingleProcessUpdate')
 def SingleProcessUpdate():
     '''
-    http://127.0.0.1:5000/SingleProcessUpdate?xcoord=1530798259&ycoord=3&datetime=2019-12-28 04:48:53
-    info should have form of: xcoord, ycoord, datetime str '%Y-%m-%d %H:%M:%S'
-    inputs = pandas data frame with correct labels
-    msg = PointProcess.update_from_new_inputs(inputs)
+    http://127.0.0.1:5000/SingleProcessUpdate?xcoord=-86.43&ycoord=39.14&timestamp=1532959162
+    info should have form of: xcoord, ycoord, unix timestamp
     '''
     xcoord = [float(request.args.get('xcoord'))]
     ycoord = [float(request.args.get('ycoord'))]
-    datetime = [request.args.get('datetime')]
+    datetime = request.args.get('timestamp')
+    datetime = [datetime.datetime.fromtimestamp(float(datetime))]
     update_df = {'XCOORD': xcoord, 'YCOORD': ycoord, 'DATE_TIME': datetime}
-    print(datetime, xcoord, ycoord)
     update_df = pd.DataFrame(update_df)
     msg = PointProcess.update_from_new_inputs(update_df)
 
