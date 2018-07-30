@@ -167,7 +167,7 @@ def filter_data (data):
 '''
 def wasserstein_cluster (trucks, interval_time, interval_count, start_time):
     move_data, still_data = shrink_data (trucks)
-    grid_loc = PointProcess.locs_for_wasserstein (start_time, interval_count, 80)
+    grid_loc = PointProcess.locs_for_wasserstein (start_time = start_time, num_projections = interval_count, top_percent = 80)
     end_time = start_time + datetime.timedelta(seconds = 15*60*interval_count)
 
     cluster = Cluster (grid_loc, len(move_data))
