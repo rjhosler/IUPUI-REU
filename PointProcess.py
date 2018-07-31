@@ -96,7 +96,7 @@ class PointProcessTrain:
         last_event_time = event_time
 
         # update periodic trends
-        dt_day = .000015
+        dt_day = .00015
         day_prob = (1-dt_day)*day_prob
         day_prob[curr_day] += dt_day
 
@@ -113,14 +113,14 @@ class PointProcessTrain:
 
         # Mu initialized if it neeeds to be!!
         if mu[gx][gy] == 0.0000000000:
-            mu[gx][gy] = .01
+            mu[gx][gy] = .08
 
         # find day and hour
         curr_day = event_time.weekday()
         curr_hour = self.get_hour_vec_indx(event_time)
 
         # local update based on where event occurred
-        dt = 0.00025
+        dt = 0.0025
         g_time_delta = (event_time - Gtimes.at[gx,gy]).total_seconds()*self._time_scale
         Gtimes.at[gx,gy] = event_time
 
@@ -351,6 +351,8 @@ class PointProcessRun(PointProcessTrain):
         self._ymax = float(trained_params['grid_info'][5])
 
     def update_from_new_inputs(self, update_data, save_out = True):
+
+        msg = ''
         # update_data should be a dataframe and should have headers and format: DATE_TIME (datetime string, format='%Y-%m-%d %H:%M:%S'), XCOORD (longitude), YCOORD (latitude)
         
         new_points = len(update_data)
@@ -365,13 +367,23 @@ class PointProcessRun(PointProcessTrain):
                 break
 
         if indx is None:
-            msg = 'No inputted events occurred at a later date than events previously used for training'
+            msg = 'No inputted events occurred at a later date than events previously used for training. Will not use for update.'
             return msg
 
         update_data = update_data[indx:]
         update_data.reset_index(drop = True, inplace = True)
         new_points = len(update_data)
 
+        if len(update_data) == 1 and (update_data.DATE_TIME[0]-self._LastTime).total_seconds() > 864000:
+            msg = 'Inputted event occurred more than 10 days since last event used for model update. Cannot update. Input more events to generate new model LastTime'
+            return msg
+
+        if len(update_data) >= 2 and (update_data.DATE_TIME[0]-self._LastTime).total_seconds() > 864000:
+            msg = 'Earliest inputted event was more than 10 days since last event used for model update. Will use this event as last model LastTime to approximate continuity. '
+            self._LastTime = update_data.DATE_TIME[0]
+            update_data = update_data[1:]
+            update_data.reset_index(drop = True, inplace = True)
+            new_points = len(update_data)
         
         for i in range(0, new_points):
 
@@ -385,11 +397,11 @@ class PointProcessRun(PointProcessTrain):
             # local update: 
             self._F, self._mu, self._theta, self._Gtimes = self.local_update(self._Gtimes, update_data.DATE_TIME[i],
                 self._day, self._hour, self._F, self._mu, self._theta, gx, gy)
-        msg = 'Parameters updated: ' + str(new_points) + ' used for update ranging from: '+ update_data.DATE_TIME[0].strftime('%Y-%m-%d %H:%M:%S') + ' to ' + update_data.DATE_TIME[new_points-1].strftime('%Y-%m-%d %H:%M:%S')+'.'
+        msg = msg + 'Parameters updated: ' + str(new_points) + ' used for update ranging from: '+ update_data.DATE_TIME[0].strftime('%Y-%m-%d %H:%M:%S') + ' to ' + update_data.DATE_TIME[new_points-1].strftime('%Y-%m-%d %H:%M:%S')+'.'
 
         if save_out:
             self.save_params()
-            msg = 'Parameters updated: ' + str(new_points) + ' used for update ranging from: '+ update_data.DATE_TIME[0].strftime('%Y-%m-%d %H:%M:%S') + ' to ' + update_data.DATE_TIME[new_points-1].strftime('%Y-%m-%d %H:%M:%S')+'. Params also saved.'
+            msg =  msg + 'Parameters updated: ' + str(new_points) + ' used for update ranging from: '+ update_data.DATE_TIME[0].strftime('%Y-%m-%d %H:%M:%S') + ' to ' + update_data.DATE_TIME[new_points-1].strftime('%Y-%m-%d %H:%M:%S')+'. Params also saved.'
         
         return msg
 
@@ -452,7 +464,8 @@ class PointProcessRun(PointProcessTrain):
         time_increment, scale = self.get_time_increment(time_step)
         time_limit = num_periods*time_increment*self._time_scale
         print("Events will be projected until " + str(time_limit) + " "+ str(self._time_scale_label)+ " from now")
-        percentile_sum_F_50 = np.percentile(np.sum(self._F, axis = 2),50)
+
+        T = 1/np.amin(self._w)
 
         for i in range(0, num_iterations):
             last_time = self._LastTime
@@ -462,7 +475,7 @@ class PointProcessRun(PointProcessTrain):
             for x in range(0, self._xsize):
                 for y in range(0, self._ysize):
                     if self._mu[x][y] > 0:
-                        local_events = self.ESTProcess(self._mu[x][y], self._theta, self._w, 100)   # come back to this!
+                        local_events = self.ESTProcess(self._mu[x][y], self._theta, self._w, T)
                         for l in range(0, len(local_events)):
                             local = array([x, y, local_events[l]])
                             events = np.vstack((events, local))
