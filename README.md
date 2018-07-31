@@ -58,7 +58,7 @@ We have developed a clustering and prediction method that forms the back end of 
    * ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/GET.png )
 #### Vehicle Locations
 * Utilizing the post request is easy to use in [Postman](https://www.getpostman.com). Here you will need to send in a json file of the current truck locations. The Postman environment should look like this:
-   * ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/Post_Usage.png )
+   * ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/Post_Usage_nolink.png)
 * The "start_time" parameter will specify when the point process will predict point intensities. This trucks will allocate over this data. "interval_count" determines the length of time to predict while "interval_time" sets the length of each interval (NOTE: this parameter is ignored and the default 15 will always be used). For the current truck positions, "trucks" contains a list of each trucks' geographical location. The "virtual" parameter determines if the truck is allocatable.
 * Sending the POST request will yeild results like this:
    * ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/Post_Result.png )
