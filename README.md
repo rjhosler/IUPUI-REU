@@ -54,7 +54,7 @@ We have developed a clustering and prediction method that forms the back end of 
 * The Amazon Web Service link is brain-env.jezptdbkpz.us-east-2.elasticbeanstalk.com 
 ##### GET
 * The 2 required query parameters are the following: "start_time" and "interval_count". "start_time" is a timestamp formated time to start the point intensity prediction. "interval_count" is the amount of 15 minute intervals to predict. This request will return the 70 by 50 grid of point intensites (3500 points per "interval_count"). An example URL string will yeild the following results:
-   * ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/GET.json )
+   * ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/GET.psd )
 
 ### Authors
 * marches
