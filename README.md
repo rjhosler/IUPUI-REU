@@ -51,18 +51,25 @@ We have developed a clustering and prediction method that forms the back end of 
    * ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/wasserstein_graph.png )
    
 #### API Usage
-* The Amazon Web Service link is brain-env.jezptdbkpz.us-east-2.elasticbeanstalk.com 
-##### GET
+* We have configured our code to run on Amazon Web Services.  
+##### Intensity Projections
 * The 2 required query parameters are the following: "start_time" and "interval_count". "start_time" is a timestamp formated time to start the point intensity prediction. "interval_count" is the amount of 15 minute intervals to predict. This request will return the 70 by 50 grid of point intensites (3500 points per "interval_count"). An example URL string will yeild the following results:
-   * URL: https://brain-env.jezptdbkpz.us-east-2.elasticbeanstalk.com/emergencies?start_time=1485798259&interval_count=1
+   * URL: https://server_address/emergencies?start_time=1485798259&interval_count=1
    * ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/GET.png )
-#### POST
+#### Vehicle Locations
 * Utilizing the post request is easy to use in [Postman](https://www.getpostman.com). Here you will need to send in a json file of the current truck locations. The Postman environment should look like this:
    * ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/Post_Usage.png )
 * The "start_time" parameter will specify when the point process will predict point intensities. This trucks will allocate over this data. "interval_count" determines the length of time to predict while "interval_time" sets the length of each interval (NOTE: this parameter is ignored and the default 15 will always be used). For the current truck positions, "trucks" contains a list of each trucks' geographical location. The "virtual" parameter determines if the truck is allocatable.
 * Sending the POST request will yeild results like this:
    * ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/Post_Result.png )
 * This returns a list of objects called "TruckSchema." Each object has the current location and the assigned location.
+#### Update Model
+##### CSV Upload
+* The model can be updated through CSV upload using the login.html file.
+* Simply load the correctly formatted CSV: ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/csv.png)
+##### GET
+* The model can also be updated through a get request with URL string parameters xcoord (longitude), ycoord (latitude) and unix timestamp.
+* Example URL: http://server_address/SingleProcessUpdate?xcoord=-86.43&ycoord=39.14&timestamp=1532959162.
 
 
 ### Authors
