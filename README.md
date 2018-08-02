@@ -66,7 +66,8 @@ We have developed a clustering and prediction method that forms the back end of 
 #### Update Model
 ##### CSV Upload
 * The model can be updated through CSV upload using the login.html file.
-* Simply load the correctly formatted CSV: ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/csv.png)
+* Simply load the correctly formatted CSV: 
+  * ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/csv.png)
 ##### GET
 * The model can also be updated through a get request with URL string parameters xcoord (longitude), ycoord (latitude) and unix timestamp.
 * Example URL: http://server_address/SingleProcessUpdate?xcoord=-86.43&ycoord=39.14&timestamp=1532959162.
