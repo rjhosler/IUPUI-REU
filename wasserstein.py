@@ -168,10 +168,9 @@ class Cluster:
         
 
     #method for learning smoothing parameter
-    def learn_lam (self, n_iter, rand_centers):
+    def learn_lam (self, n_iter, rand_centers, lam):
         centers = self._centers
         data = self._data
-        lam = len(self._data) / 2
         #lam = np.random.randint(low = len(self._data) / 2, high = len(self._data))
         minDist = 100; prev_lam = 0; flam = 0; dist = 10; low = 1; high = 5; diminish = 1; found = 0
         for i in range (n_iter):

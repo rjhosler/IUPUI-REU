@@ -47,7 +47,8 @@ def emergencies():
     total_output = []
 
     predictions, times, increment = PointProcess.get_events_for_api(start_time, interval_count, top_percent = 0)
-    
+
+    pred_max = 0
     for j in range (int(interval_count)):            
         output = {
             'start': times[j],
@@ -62,8 +63,22 @@ def emergencies():
                     'long': predictions[j][i][1]
                     }
             })
+            
+            if (predictions[j][i][2] > pred_max):
+                pred_max = predictions[j][i][2]
+                im_save = {
+                'intensity': predictions[j][i][2],
+                'location': {
+                    'lat': predictions[j][i][0],
+                    'long': predictions[j][i][1]
+                    }
+                }
+            
         total_output.append (output)
         print (len(output['emergencies']))
+
+        with open('GET.json', 'w') as fp:
+            json.dump(im_save, fp)
 
     return jsonify(total_output)
 
@@ -172,11 +187,11 @@ def wasserstein_cluster (trucks, interval_time, interval_count, start_time):
 
     cluster = Cluster (grid_loc, len(move_data))
     cluster.set_centers (move_data[:,0:2], len(move_data))
-    if (still_data.size > 0):
-        cluster.remove_points (still_data [:,0:2])
+    #if (still_data.size > 0):
+    #    cluster.remove_points (still_data [:,0:2])
 
-    lam = cluster.learn_lam(6, False)
-    cluster.round_off()
+    lam = cluster.learn_lam(5, False, len (grid_loc))
+    #cluster.round_off()
     data = grid_loc
     bincount = 90
 
