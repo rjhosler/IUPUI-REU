@@ -35,7 +35,7 @@ class Cluster:
     #method to implement the wasserstein algorithm
     #return new centers
     def wasserstein (self, lam):
-        theta = 0.3
+        theta = 0.5
         a = 1 / len (self._centers)
         #use intensities for b
         b = self._data [:,2] / sum (self._data [:,2])
@@ -58,7 +58,7 @@ class Cluster:
                     print ("emergency exit")
                     return (X)
                 change = la.norm (u - oldu)
-                if (max_iter2 > np.amax([lam, 100])):
+                if (max_iter2 > np.amax([lam*2, 100])):
                     change = 0
                 max_iter2 += 1
             V = np.divide (b, np.matmul (np.transpose(K), u))        
@@ -66,7 +66,7 @@ class Cluster:
             oldX = X
             X = np.float64((X * (1 - theta)) + (np.divide (np.matmul (T, data), a) * theta))
             max_iter1 += 1
-            if (la.norm (oldX - X) < 0.005 or max_iter1 > 50):
+            if (la.norm (oldX - X) < 0.001 or max_iter1 > 100):
                 return X
 
     #Alternate clustering method using k-means
@@ -171,7 +171,7 @@ class Cluster:
     def learn_lam (self, n_iter, rand_centers):
         centers = self._centers
         data = self._data
-        lam = len(self._data) / 4
+        lam = len(self._data) / 2
         #lam = np.random.randint(low = len(self._data) / 2, high = len(self._data))
         minDist = 100; prev_lam = 0; flam = 0; dist = 10; low = 1; high = 5; diminish = 1; found = 0
         for i in range (n_iter):
@@ -217,7 +217,7 @@ class Cluster:
 
         self._centers = centers
         self._data = self.cluster_assignment()
-        print ("Iteration: ", found + 1)
+        #print ("Iteration: ", found + 1)
         return flam
 
     #calc driving distance between 2 coordinates
@@ -228,6 +228,7 @@ class Cluster:
         result = simplejson.load(urllib.request.urlopen(url))
         if (result['status'] == 'OVER_QUERY_LIMIT'):
             print ('oof. try again')
+            print (result)
             time.sleep(1)
             self.driving_distance(coord1, coord2)            
         driving_time = result['rows'][0]['elements'][0]['distance']['value'] / 1000
