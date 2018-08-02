@@ -48,7 +48,7 @@ We have developed a clustering and prediction method that forms the back end of 
    * ![alt_text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/wasser.png )
 
 * Running Wasserstein over predicted intensities yields results shuch as this:
-   * ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/wasserstein_graph.png )
+   * ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/ex_proj.png )
    
 #### API Usage
 * We have configured our code to run on Amazon Web Services.  
