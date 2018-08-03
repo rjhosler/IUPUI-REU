@@ -2,28 +2,7 @@
 We have developed a clustering and prediction method that forms the back end of an app designed with the Indianapolis EMS department to decrease their overall response time to medical emergencies. Our method uses an online Hawkes process estimation algorithm to model and predict the probability of medical events in specified grid cells. We use calculations of Wasserstein Barycenters to place ambulances in optimal locations during predicted peak event times. Moreover, our method is extendable to other spatial-temporal processes and available as an API for public use. 
 
 ### Instillation
-* Requirements
-   * click==6.7
-   * cycler==0.10.0
-   * Flask==1.0.2
-   * haversine==0.4.5
-   * itsdangerous==0.24
-   * Jinja2==2.10
-   * kiwisolver==1.0.1
-   * MarkupSafe==1.0
-   * matplotlib==2.2.2
-   * numpy==1.15.0
-   * pandas==0.23.3
-   * pymongo==3.7.1
-   * pyparsing==2.2.0
-   * python-dateutil==2.7.3
-   * pytz==2018.5
-   * scikit-learn==0.19.2
-   * scipy==1.1.0
-   * simplejson==3.16.0
-   * six==1.11.0
-   * sklearn==0.0
-   * Werkzeug==0.14.1
+* [Requirements](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/requirements.txt)
 * Clone to your local repository
 
 ### Usage
