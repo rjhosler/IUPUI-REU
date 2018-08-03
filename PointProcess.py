@@ -374,16 +374,13 @@ class PointProcessRun(PointProcessTrain):
         update_data.reset_index(drop = True, inplace = True)
         new_points = len(update_data)
 
-        if len(update_data) == 1 and (update_data.DATE_TIME[0]-self._LastTime).total_seconds() > 864000:
-            msg = 'Inputted event occurred more than 10 days since last event used for model update. Cannot update. Input more events to generate new model LastTime'
-            return msg
+        max_allowable_time_dt = 1/(np.amax(self._w))
 
-        if len(update_data) >= 2 and (update_data.DATE_TIME[0]-self._LastTime).total_seconds() > 864000:
-            msg = 'Earliest inputted event was more than 10 days since last event used for model update. Will use this event as last model LastTime to approximate continuity. '
-            self._LastTime = update_data.DATE_TIME[0]
-            update_data = update_data[1:]
-            update_data.reset_index(drop = True, inplace = True)
-            new_points = len(update_data)
+        if (update_data.DATE_TIME[0]-self._LastTime).total_seconds() > max_allowable_time_dt/self._time_scale:
+            self._LastTime = update_data.DATE_TIME[0] - datetime.timedelta(days = max_allowable_time_dt)
+            print(self._LastTime)
+            msg = 'Inputted event occurred more than ' +str(max_allowable_time_dt)+' days since last event used for model update. Generated a fake LastTime to compensate, but this is not ideal in the long term.'
+            return msg
         
         for i in range(0, new_points):
 
@@ -533,7 +530,7 @@ class PointProcessRun(PointProcessTrain):
 
         return intensity_predictions, array(times), time_increment
     
-    def get_events_for_api(self, start_time, num_periods, time_step=15, top_percent = 0, use_synthetic = False):
+    def get_events_for_api(self, start_time, num_periods, time_step=15, top_percent = 0, use_synthetic = True):
         # formats future predictions for the api
 
         if use_synthetic:
@@ -638,7 +635,7 @@ class PointProcessRun(PointProcessTrain):
 
         return pai, n_frac, a_frac
 
-    def locs_for_wasserstein(self, start_time, num_projections = 16, time_step = 15, use_synthetic=False, top_percent = 90):
+    def locs_for_wasserstein(self, start_time, num_projections = 16, time_step = 15, use_synthetic = True, top_percent = 90):
 
         if use_synthetic:
             predictions, time_increments, time_increment_unit = self.get_future_events_with_synthetic(start_time, num_projections, time_step, top_percent)
@@ -648,6 +645,7 @@ class PointProcessRun(PointProcessTrain):
 
         sum_predictions = sum(predictions[:,:])
         reshaped_sum = self.reshape_lam(sum_predictions, list_format = 'np') 
+
         return reshaped_sum
 
     def reshape_lam(self, lam, list_format = 'np'):
