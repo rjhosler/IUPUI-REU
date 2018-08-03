@@ -20,7 +20,7 @@ We have developed a clustering and prediction method that forms the back end of 
 * Predictions can be generated through the following methods.
    * ![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/predictions.png )
 * Locations for Wasserstein clustering can also be generated.
-   * ![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/locs_for_wasserstein.png )
+   * ![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/wasser_locs.png )
 
 #### Wasserstein
 * Here is an example of Wasserstein clustering using locations passed in from PointProcessRun class: 
