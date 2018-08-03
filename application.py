@@ -111,12 +111,12 @@ def ProcessUpdate(name):
 
 @application.route('/login', methods = ['POST', 'GET'])
 def login():
-   if (request.method == 'POST'):
-      user = request.form.get('nm', None)
-      return redirect(url_for('ProcessUpdate',name = user))
-   else:
-      user = request.args.get('nm')
-      return redirect(url_for('ProcessUpdate',name = user))
+    if request.method == 'POST':
+        user = request.form['nm']
+        return redirect(url_for('ProcessUpdate',name = user))
+    else:
+        user = request.args.get('nm')
+        return redirect(url_for('ProcessUpdate',name = user))
 
 @application.route('/assignments', methods = ['POST'])
 def assignments():
@@ -151,14 +151,11 @@ def assignments():
                     'long': trucks [i,1]
                 }
             }
-            if (trucks [i,2] == True):
-                curr_object ['assigned_location'] = {
-                    'lat': assignments [assign_iter,0],
-                    'long': assignments [assign_iter,1]
-                }
-                assign_iter += 1
-            else:
-                curr_object ['assigned_location'] = curr_object ['location']
+            curr_object ['assigned_location'] = {
+                'lat': assignments [assign_iter,0],
+                'long': assignments [assign_iter,1]
+            }
+            assign_iter += 1
             output ['TruckSchema'].append (curr_object)
             
         return jsonify(output)
@@ -181,23 +178,16 @@ def filter_data (data):
     4.) Cluster the data and return the centers
 '''
 def wasserstein_cluster (trucks, interval_time, interval_count, start_time):
-    move_data, still_data = shrink_data (trucks)
-    grid_loc = PointProcess.locs_for_wasserstein (start_time = start_time, num_projections = interval_count, top_percent = 80)
+    move_data = shrink_data (trucks)
+    grid_loc = PointProcess.locs_for_wasserstein (start_time = start_time, num_projections = interval_count, top_percent = 60)
     end_time = start_time + datetime.timedelta(seconds = 15*60*interval_count)
 
     cluster = Cluster (grid_loc, len(move_data))
     cluster.set_centers (move_data[:,0:2], len(move_data))
-    #if (still_data.size > 0):
-    #    cluster.remove_points (still_data [:,0:2])
-
-    lam = cluster.learn_lam(5, False, len (grid_loc))
-    #cluster.round_off()
+    lam = cluster.learn_lam(1, False)
     data = grid_loc
-    bincount = 90
 
-    #Wasserstein
     centers = cluster.get_centers()
-    dist = cluster.get_dist()
     
     centers = close_assignment (centers, move_data)    
     return centers
@@ -207,12 +197,8 @@ def shrink_data (trucks):
     data[:,0] = trucks [:,0]
     data[:,1] = trucks [:,1]
     data[:,2] = trucks [:,2]
-    data = data.tolist()
-    data1 = [[lat, long, virtual] for (lat, long, virtual) in data if virtual == True]
-    data1 = np.array(data1)
-    data2 = [[lat, long, virtual] for (lat, long, virtual) in data if virtual == False]
-    data2 = np.array(data2)
-    return data1, data2
+    data = np.array (data)
+    return data
 
 #have trucks go to the assigned location that is closest to them
 def close_assignment (centers, trucks):
