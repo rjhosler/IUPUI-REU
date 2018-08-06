@@ -1,0 +1,85 @@
+def blip(intensity, centers, datetime, threshold):    
+    for_gridding = PointProcessRun(param_location = trained_loc, save_loc = save_loc)
+    xsize = for_gridding._xsize
+    ysize = for_gridding._ysize
+    
+    x_labels = []
+    y_labels = []
+    for i in range(0, len(intensity)):
+        x, y = for_gridding.grid_to_coord(i, i)
+        y_labels.append(str(round(y,3)))
+        x_labels.append(str(round(x,3)))
+    if xsize>ysize:
+        y_labels = y_labels[:ysize]
+    elif ysize>xsize:
+        x_labels = x_labels[:xsize]
+    
+    int_df = pd.DataFrame(np.transpose(intensity), columns = x_labels, index = y_labels)
+    int_df = int_df.reindex(index=int_df.index[::-1])
+    int_df[(int_df<threshold)] = np.nan
+    
+    
+    midline = ysize/2
+    centers_grid_x = np.zeros(len(centers))
+    centers_grid_y = np.zeros(len(centers))
+    
+    for i in range(0, len(centers)):
+        centers_grid_x[i], centers_grid_y[i] = for_gridding.coord_to_grid(centers[i][1], centers[i][0])
+    for i in range(0, len(centers_grid_y)):
+        centers_grid_y[i] = midline + midline - centers_grid_y[i]
+    
+    import matplotlib.colors 
+    import matplotlib.cm 
+
+    plt.rcParams.update({'font.size': 9, 'text.color' : "black",
+                     'axes.labelcolor' : "black"})
+
+    plt.subplots(figsize=(90,60))
+
+    # get the map image as an array so we can plot it 
+    import matplotlib.image as mpimg 
+    map_img = mpimg.imread('/home/march/IUPUI-REU/0Screenshots/stitched_together_map.png') 
+
+    import seaborn as sns; sns.set()
+    sns.set(font_scale=8)
+    mask = int_df.isnull()
+    ax = sns.heatmap(int_df,
+                cmap = "Reds",
+                alpha = 0.60, # whole heatmap is translucent
+                annot = False,
+                zorder = 2,
+                xticklabels=10,
+                yticklabels=10,
+                rasterized=True,
+                linewidths=0.0,
+                vmin = 0,
+                vmax = .02,
+                mask=mask,
+                cbar_kws = dict(use_gridspec=False,location="left", label='Event Intensity (rate)')
+                )
+
+    ambl_img = mpimg.imread('ambl_circl.png')
+    os = 1.5
+
+    # heatmap uses pcolormesh instead of imshow, so we can't pass through 
+    # extent as a kwarg, so we can't mmatch the heatmap to the map. Instead, 
+    # match the map to the heatmap:
+    '''
+    ax.imshow(map_img,
+              aspect = ax.get_aspect(),
+              extent = ax.get_xlim() + ax.get_ylim(),
+              zorder = 1) #put the map under the heatmap
+
+    for i in range(0, len(centers)):
+        x = centers_grid_x[i]
+        y = centers_grid_y[i]
+
+        ax.imshow(ambl_img, aspect=ax.get_aspect(), extent = (x-os, x+os, y-os, y+os), zorder=3, alpha=1)
+    '''
+    from matplotlib.pyplot import show 
+
+    ax.set_title("Projected Intensities & Ambulance Placements\n" + str(datetime))
+    show()
+    
+    tosave = ax.get_figure()
+    tosave.savefig(str(datetime)+".png", bbox_inches='tight')
