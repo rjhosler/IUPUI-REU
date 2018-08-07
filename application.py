@@ -43,7 +43,7 @@ def emergencies():
     else:
         time_interval = 15
  
-    start_time =  datetime.datetime.fromtimestamp(float(start_time))
+    start_time =  datetime.datetime.utcfromtimestamp(float(start_time))
     total_output = []
 
     predictions, times, increment = PointProcess.get_events_for_api(start_time=start_time, num_periods=interval_count, time_step=time_interval, top_percent = 0)
@@ -92,7 +92,7 @@ def SingleProcessUpdate():
     xcoord = [float(request.args.get('xcoord'))]
     ycoord = [float(request.args.get('ycoord'))]
     time = request.args.get('timestamp')
-    time_stamp = datetime.datetime.fromtimestamp(float(time))
+    time_stamp = datetime.datetime.utcfromtimestamp(float(time))
     time_stamp = [time_stamp]
     update_df = {'XCOORD': xcoord, 'YCOORD': ycoord, 'DATE_TIME': time_stamp}
     update_df = pd.DataFrame(update_df)
@@ -126,7 +126,7 @@ def assignments():
         data = request.get_json()
         
         trucks = filter_data(data ['trucks'])
-        start_time = datetime.datetime.fromtimestamp(float(data ['start_time']))
+        start_time = datetime.datetime.utcfromtimestamp(float(data ['start_time']))
         interval_time = data ['interval_time']
         interval_count = data ['interval_count']
         virtual = trucks [:,2]
