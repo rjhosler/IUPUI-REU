@@ -14,7 +14,7 @@ class PointProcessTrain:
     #omega (w) is initialized to generic points
     #time_step selects multiplier for dt
     def __init__ (self, training_points, xgridsize = 100, ygridsize = 100, 
-        xmin = -86.3283, xmax =  -85.8942, ymin = 39.6277, ymax = 39.9277, 
+        xmin = -86.3283, xmax =  -85.9311, ymin = 39.6277, ymax = 39.9277, 
         w = [.5, .1, .05], pred_interval_label = '15minutes', track_granularity = 1000, lam_memory = 500,
         final_param_save_loc = 'Trained_Params.npz', param_track_save_loc = 'Track_Of_Params.npz'):
         
@@ -52,7 +52,7 @@ class PointProcessTrain:
         self._Lam_for_hotspots = np.ones([lam_memory, self._xsize, self._ysize])
 
         self._time_scale_label = 'days'
-        self._time_scaling_lookup = {'days': 1.15741e-5, 'hours': 0.0002777784, '15minutes': 0.001111111, 'minutes': 0.016666704, 'seconds': 1}  # for converting from seconds to days, hours, etc. 
+        self._time_scaling_lookup = {'days': 1.15741e-5, 'hours': 0.0002777784, 'minutes': 0.016666704, 'seconds': 1}  # for converting from seconds to days, hours, etc. 
         self._time_scale = self._time_scaling_lookup[self._time_scale_label]
 
         self._day = np.ones(7)*1/7
@@ -338,7 +338,7 @@ class PointProcessRun(PointProcessTrain):
             self._save_out = param_location
 
         self._time_scale_label = str(trained_params['time_scale'])
-        self._time_scaling_lookup = {'days': 1.15741e-5, 'hours': 0.0002777784, '15minutes': 0.001111111, 'minutes': 0.016666704, 'seconds': 1}
+        self._time_scaling_lookup = {'days': 1.15741e-5, 'hours': 0.0002777784, 'minutes': 0.016666704, 'seconds': 1}
         self._time_scale = self._time_scaling_lookup[self._time_scale_label]
 
         self._hour_subdivision = int(trained_params['pred_interval_hourly_subdivision'])
@@ -377,9 +377,9 @@ class PointProcessRun(PointProcessTrain):
         max_allowable_time_dt = 1/(np.amax(self._w))
 
         if (update_data.DATE_TIME[0]-self._LastTime).total_seconds() > max_allowable_time_dt/self._time_scale:
-            self._LastTime = update_data.DATE_TIME[0] - datetime.timedelta(days = max_allowable_time_dt)
+            self._LastTime = update_data.DATE_TIME[0] - datetime.timedelta(seconds = max_allowable_time_dt / self._time_scale)
             print(self._LastTime)
-            msg = 'Inputted event occurred more than ' +str(max_allowable_time_dt)+' days since last event used for model update. Generated a fake LastTime to compensate, but this is not ideal in the long term.'
+            msg = 'Inputted event occurred more than ' +str(max_allowable_time_dt)+ str(self._time_scale_label) +' since last event used for model update. Generated a fake LastTime to compensate, but this is not ideal in the long term.'
             return msg
         
         for i in range(0, new_points):
@@ -401,6 +401,7 @@ class PointProcessRun(PointProcessTrain):
             msg =  msg + 'Parameters updated: ' + str(new_points) + ' used for update ranging from: '+ update_data.DATE_TIME[0].strftime('%Y-%m-%d %H:%M:%S') + ' to ' + update_data.DATE_TIME[new_points-1].strftime('%Y-%m-%d %H:%M:%S')+'. Params also saved.'
         
         return msg
+
 
     def calculate_future_intensity(self, last_time, future_time, F, decay=False):  
         # calls get_intensity to get each indivicual value of Lamba
@@ -453,9 +454,9 @@ class PointProcessRun(PointProcessTrain):
             intensity_predictions[i] = intensity*scale
 
         return intensity_predictions, array(times), time_increment
-
+    
     def get_future_events_with_synthetic(self, start_time, num_periods, time_step, top_percent, num_iterations = 8):
-
+        
         intensity_predictions = np.zeros([num_iterations, num_periods, self._xsize, self._ysize])
         times = []
         time_increment, scale = self.get_time_increment(time_step)
@@ -468,6 +469,7 @@ class PointProcessRun(PointProcessTrain):
             last_time = self._LastTime
             F = np.copy(self._F)
 
+            # Generate synthetic events with day time multiplier. Get a poisson process for each grid cell
             events = np.empty([1,3])
             for x in range(0, self._xsize):
                 for y in range(0, self._ysize):
@@ -484,23 +486,33 @@ class PointProcessRun(PointProcessTrain):
             if len(events) > 0:
                 events = events[events[:,2].argsort()]
 
+            # offset events by time_step so that the kernels can be re-triggered from the start
+            # time_step is in units of minutes. Convert that to match time_scale. minutes -> seconds -> model time scale
+            offset = time_step / self._time_scaling_lookup['minutes'] * self._time_scaling_lookup[self._time_scale_label]
+
+            events[:,2] = events[:,2] - offset
+
             last_events_index = 0
 
-            # have to initialize somewhere why not here
             sim_time = start_time
             
             for t in range(0, num_periods):
                 time_multiplier = time_increment*t
                 multiplier_in_days = time_multiplier * 1.15741e-5
+                still_in_future_multipler = time_increment * (t + 1) * 1.15741e-5
                 future_time = future_time = start_time + datetime.timedelta(seconds = time_multiplier)
                 times.append(future_time)
+
                 still_in_future_index = np.argmax(events[:,2]>multiplier_in_days)
+
+                proj_used = False
                 
                 for n in range(last_events_index, still_in_future_index):
+                    proj_used = True
                     x = int(events[n][0])
                     y = int(events[n][1])
-                    sim_time = start_time + datetime.timedelta(days = events[n][2])
-                    last_sim_time = start_time + datetime.timedelta(days = events[n-1][2])
+                    sim_time = start_time + datetime.timedelta(seconds = events[n][2] / self._time_scale)
+                    last_sim_time = start_time + datetime.timedelta(seconds = events[n-1][2] / self._time_scale)
                     if n == 0:
                         last_sim_time = start_time
 
@@ -522,10 +534,12 @@ class PointProcessRun(PointProcessTrain):
                     intensity[neg_indxs] = 0             # set negative values to 0
 
                 intensity_predictions[i][t] = intensity*scale
+            if proj_used:  
+                print("Number of simulated events used: " + str(still_in_future_index-1)+". First Event Time: "
+                    +str(start_time + datetime.timedelta(seconds  = events[0][2] / self._time_scale))+" End: "+str(start_time + datetime.timedelta(seconds = events[still_in_future_index-1][2] / self._time_scale)))
+            else:
+                print("Number of simulated events used: 0")
                 
-            print("Number of simulated events used: " + str(still_in_future_index-1)+". First Event Time: "
-                +str(start_time + datetime.timedelta(days = events[0][2]))+" End: "+str(start_time + datetime.timedelta(days = events[-1][2])))
-            
         intensity_predictions = sum(intensity_predictions) / num_iterations
 
         return intensity_predictions, array(times), time_increment
@@ -669,7 +683,7 @@ class PointProcessRun(PointProcessTrain):
         return x_y_lam
 
     def ESTProcess(self, mu, theta, w, T):
-        # mu units: #/day, k0 units: #/day, w units: #/day
+        # mu units: #/time_scale, k0 units: #/time_scale, w units: #/time_scale
         full_times = np.empty(1)
         for i in range(0,self._K):
             # base number of events
@@ -689,4 +703,4 @@ class PointProcessRun(PointProcessTrain):
             full_times = np.append(full_times, times)
         full_times = full_times[1:]
         return full_times   
-
+    
