@@ -46,7 +46,7 @@ def emergencies():
     start_time =  datetime.datetime.fromtimestamp(float(start_time))
     total_output = []
 
-    predictions, times, increment = PointProcess.get_events_for_api(start_time, interval_count, top_percent = 0)
+    predictions, times, increment = PointProcess.get_events_for_api(start_time=start_time, num_periods=interval_count, time_step=time_interval, top_percent = 0)
 
     pred_max = 0
     for j in range (int(interval_count)):            
@@ -91,9 +91,10 @@ def SingleProcessUpdate():
     '''
     xcoord = [float(request.args.get('xcoord'))]
     ycoord = [float(request.args.get('ycoord'))]
-    datetime = request.args.get('timestamp')
-    datetime = [datetime.datetime.fromtimestamp(float(datetime))]
-    update_df = {'XCOORD': xcoord, 'YCOORD': ycoord, 'DATE_TIME': datetime}
+    time = request.args.get('timestamp')
+    time_stamp = datetime.datetime.fromtimestamp(float(time))
+    time_stamp = [time_stamp]
+    update_df = {'XCOORD': xcoord, 'YCOORD': ycoord, 'DATE_TIME': time_stamp}
     update_df = pd.DataFrame(update_df)
     msg = PointProcess.update_from_new_inputs(update_df)
 
