@@ -30,7 +30,8 @@ We have developed a clustering and prediction method that forms the back end of 
    * ![alt_txt](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/ex_proj.png )
    
 #### API Usage
-* We have configured our code to run on Amazon Web Services. 
+* We have configured our code to run on Amazon Web Services.
+* NOTE: timestamps will be converted to UTC.
 * This is the main idea:
     * ![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/system.png )
 ##### Intensity Projections
