@@ -62,3 +62,6 @@ We have developed a clustering and prediction method that forms the back end of 
 ### References
 * Mohler, George, and P. Jeffrey Brantingham. “Privacy Preserving, Crowd Sourced Crime Hawkes Processes.” 2018 International Workshop on Social Sensing (SocialSens), 28 May 2018, doi:10.1109/socialsens.2018.00016.
 * Cuturi, Marco, and Arnaud Doucet. “Fast Computation of Wasserstein Barycenters.” Proceedings of the 31st International Conference on Machine Learning, JMLR W&CP 32 (2) 2014, 14 June 2014, doi:arXiv:1310.4375v3 [stat.ML] . 
+
+### Citation
+* [Please cite this paper](https://github.com/rjhosler/IUPUI-REU/blob/master/RaspBary.pdf) if you plan on using this software in an academic project.
