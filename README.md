@@ -1,5 +1,8 @@
 # RaspBary: Hawkes Point Process Wasserstein Barycenters as a Service
 We have developed a clustering and prediction method that forms the back end of an app designed with the Indianapolis EMS department to decrease their overall response time to medical emergencies. Our method uses an online Hawkes process estimation algorithm to model and predict the probability of medical events in specified grid cells. We use calculations of Wasserstein Barycenters to place ambulances in optimal locations during predicted peak event times. Moreover, our method is extendable to other spatial-temporal processes and available as an API for public use. 
+
+## Real-time Allocation Service with Point process BARYcenters
+
 ![alt_text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/allocation_looped.gif)
 
 ### Installation 
