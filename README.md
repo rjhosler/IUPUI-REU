@@ -1,7 +1,7 @@
 # RaspBary: Hawkes Point Process Wasserstein Barycenters as a Service
 
 ### Real-time Allocation Service with Point process BARYcenters
-We have developed a clustering and prediction method that forms the back end of an app designed with the Indianapolis EMS department to decrease their overall response time to medical emergencies. Our method uses an online Hawkes process estimation algorithm to model and predict the probability of medical events in specified grid cells. We use calculations of Wasserstein Barycenters to place ambulances in optimal locations during predicted peak event times. Moreover, our method is extendable to other spatial-temporal processes and available as an API for public use. 
+We have developed a clustering and prediction method that forms the back end of an app designed with the Indianapolis EMS department to decrease their overall response time to medical emergencies. Our method uses an online Hawkes process estimation algorithm to model and predict the probability of medical events in specified grid cells. We use calculations of Wasserstein Barycenters to place ambulances in optimal locations during predicted peak event times. Our method is extendable to other spatial-temporal processes and available as an API for public use. 
 
 ![alt_text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/allocation_looped.gif)
 
@@ -12,6 +12,7 @@ We have developed a clustering and prediction method that forms the back end of 
 ### Usage
 #### Point Process
 * Begin by loading in correctly data in format of Pandas dataframe with labels of DATE_TIME: datetime string,'%Y-%m-%d %H:%M:%S' (or UNIX timestamp), XCOORD: longitude coordinate, YCOORD: latitude coordinate. Then train the model.
+    * See our Wiki page for more information on initialization. In particular the min/max coordinates and track_granularity may need to be altered.
     * ![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/load_train.png )
 * After training, param_examine() suggests parameters to examine for evaluating convergence of Hawkes process values as well as variance of day and hour probability vectors used to add periodic trends to the model.
     * ![alt text](https://github.com/rjhosler/IUPUI-REU/blob/repository_images/examine.png )
