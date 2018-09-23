@@ -15,10 +15,12 @@ class PointProcessTrain:
     #time_step selects multiplier for dt
     def __init__ (self, training_points, xgridsize = 100, ygridsize = 100, 
         xmin = -86.3283, xmax =  -85.9311, ymin = 39.6277, ymax = 39.9277, 
-        w = [.5, .1, .05], pred_interval_label = '15minutes', track_granularity = 1000, lam_memory = 500,
+        w = [.5, .1, .05], pred_interval_label = 'minutes', track_granularity = 1000, lam_memory = 500,
         final_param_save_loc = 'Trained_Params.npz', param_track_save_loc = 'Track_Of_Params.npz'):
         
-        self._data = training_points 
+        self._data = training_points
+        self._data.reset_index(drop=True, inplace=True)
+        
         self._data_length = len(self._data) 
         self._xsize = xgridsize
         self._ysize = ygridsize
