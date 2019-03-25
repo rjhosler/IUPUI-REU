@@ -146,7 +146,7 @@ def assignments():
         assign_iter = 0
         for i in range (len(trucks)):
             curr_object = {
-                'id': trucks [i,3],
+                'id': data ['trucks'][i]['id'],
                 'location': {
                     'lat': trucks [i,0],
                     'long': trucks [i,1]
@@ -167,7 +167,7 @@ def filter_data (data):
         trucks [i,0] = data [i]['location']['lat']
         trucks [i,1] = data [i]['location']['long']
         trucks [i,2] = data [i]['virtual']
-        trucks [i,3] = data [i]['id']
+        trucks [i,3] = i
         trucks [i,4] = data [i]['type']
     return trucks
 
