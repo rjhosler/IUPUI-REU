@@ -131,11 +131,12 @@ def assignments():
         interval_count = data ['interval_count']
         virtual = trucks [:,2]
         
-        assignments = wasserstein_cluster (trucks, interval_time, interval_count, start_time)
+        assignments, expected = wasserstein_cluster (trucks, interval_time, interval_count, start_time)
 
         output = {
             'date': start_time,
-            'intervals': interval_count
+            'intervals': interval_count,
+            'Expected Distance': expected
         }
         output ['TruckIntervalSchema'] = {
             'date': start_time,
@@ -189,9 +190,11 @@ def wasserstein_cluster (trucks, interval_time, interval_count, start_time):
     data = grid_loc
 
     centers = cluster.get_centers()
+    expected = cluster.get_expected()
     
-    centers = close_assignment (centers, move_data)    
-    return centers
+    centers = close_assignment (centers, move_data)
+    
+    return centers, expected
 
 def shrink_data (trucks):
     data = np.zeros((len(trucks),3))

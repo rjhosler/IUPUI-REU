@@ -250,3 +250,21 @@ class Cluster:
     #return centers
     def get_centers (self):
         return self._centers
+
+    #return expected
+    def get_expected (self):
+        avg_dist = np.empty ([0])
+        for i in range (len(self._centers)):
+            isEmpty = True
+            size = 0
+            intensity = 0
+            dist_array = np.empty ([0])
+            for j in range (len(self._data)):
+                if (self._data [j, 3] == i):
+                    dist_array = np.append (dist_array, haversine (self._centers [i, :], self._data [j, 0:2], miles = True))
+                    isEmpty = False
+                    size += 1
+                    intensity += self._data [j, 2]
+            if (isEmpty == False):
+                avg_dist = np.append (avg_dist, dist_array.mean())
+        return avg_dist.mean()
