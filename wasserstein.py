@@ -157,6 +157,7 @@ class Cluster:
         busy = np.random.choice(np.arange(len(centers)), replace = False, size = n)
         self._centers = centers [busy]
         self._oldcenters = self._centers
+        self._data = self.cluster_assignment()
 
     #randomize centers
     def randomize_centers (self):
