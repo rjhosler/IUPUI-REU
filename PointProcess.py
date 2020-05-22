@@ -322,7 +322,7 @@ class PointProcessRun(PointProcessTrain):
 
     def __init__(self, param_location = 'Trained_Params.npz', save_loc = None):
 
-        trained_params = np.load(param_location)
+        trained_params = np.load(param_location, allow_pickle=True)
         self._Lam = trained_params['Lam']
         self._theta = trained_params['theta']
         self._w = trained_params['w']

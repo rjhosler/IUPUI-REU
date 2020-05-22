@@ -133,7 +133,7 @@ class Cluster:
             dist_array = np.empty ([0])
             for j in range (len(self._data)):
                 if (self._data [j, 3] == i):
-                    dist_array = np.append (dist_array, haversine (self._centers [i, :], self._data [j, 0:2], miles = True))
+                    dist_array = np.append (dist_array, haversine (self._centers [i, :], self._data [j, 0:2], unit='mi'))
                     isEmpty = False
                     size += 1
                     intensity += self._data [j, 2]
@@ -262,7 +262,7 @@ class Cluster:
             dist_array = np.empty ([0])
             for j in range (len(self._data)):
                 if (self._data [j, 3] == i):
-                    dist_array = np.append (dist_array, haversine (self._centers [i, :], self._data [j, 0:2], miles = True))
+                    dist_array = np.append (dist_array, haversine (self._centers [i, :], self._data [j, 0:2], unit='mi'))
                     isEmpty = False
                     size += 1
                     intensity += self._data [j, 2]
