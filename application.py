@@ -1,5 +1,6 @@
 #import matplotlib.pyplot as plt
 import numpy as np
+import sklearn
 from sklearn.cluster import KMeans
 import pandas as pd
 import io
@@ -26,6 +27,8 @@ from PointProcess import PointProcessRun
 import json
 from bson import json_util
 import time
+from shapely.geometry import Point
+from shapely.geometry.polygon import Polygon
 
 from flask import Flask, redirect, url_for, request, jsonify     
 application = Flask(__name__)
@@ -123,7 +126,10 @@ def login():
 def assignments():
     if (request.method == 'POST'):
     
-        data = request.get_json()
+        data = request.form['trucks']
+        data = json.loads(data)
+        polygon = request.form['polygon']
+        polygon = json.loads(polygon)
         
         trucks = filter_data(data ['trucks'])
         start_time = datetime.datetime.utcfromtimestamp(float(data ['start_time']))
@@ -131,7 +137,7 @@ def assignments():
         interval_count = data ['interval_count']
         virtual = trucks [:,2]
         
-        assignments, expected, current = wasserstein_cluster (trucks, interval_time, interval_count, start_time)
+        assignments, expected, current = wasserstein_cluster (trucks, interval_time, interval_count, start_time, polygon)
 
         output = {
             'date': start_time,
@@ -180,9 +186,18 @@ def filter_data (data):
     3.) Initialize centers with the locations of the true trucks
     4.) Cluster the data and return the centers
 '''
-def wasserstein_cluster (trucks, interval_time, interval_count, start_time):
+def wasserstein_cluster (trucks, interval_time, interval_count, start_time, polygon):
     move_data = shrink_data (trucks)
     grid_loc = PointProcess.locs_for_wasserstein (start_time = start_time, num_projections = interval_count, top_percent = 60)
+    
+    coordinates = np.array(polygon['coordinates'])
+    polygon = Polygon(coordinates)
+
+    for i in range(len(grid_loc)):
+        point = Point(grid_loc[i][0], grid_loc[i][1]) 
+        if (polygon.contains(point) != True):
+            grid_loc[i][2] = 0
+    
     end_time = start_time + datetime.timedelta(seconds = 15*60*interval_count)
 
     cluster = Cluster (grid_loc, len(move_data))
